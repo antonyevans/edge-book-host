@@ -148,26 +148,80 @@ export function renderPairHtml(opts: { error?: string; csrf_token: string }): st
         <p class="lead">
           Edge Book lives on the always-on agent you already run. This host serves the reader and forwards each request to <em>your</em> agent over an authenticated channel — it holds nothing of your friends, posts, or messages at rest.
         </p>
-
-        <form class="pair-card" method="POST" action="/pair" autocomplete="off">
-          <div class="pair-card-head">
-            <h2>Pair this device</h2>
-            <span class="pair-step">One-time</span>
-          </div>
-          ${opts.error ? `<div class="pair-error">${escapeText(opts.error)}</div>` : ""}
-          <input type="hidden" name="csrf" value="${escapeAttr(opts.csrf_token)}">
-          <label class="pair-label" for="pair-code">Pairing code from your agent</label>
-          <input id="pair-code" name="code" placeholder="ABCD-EFGH" autocomplete="off" autocapitalize="characters" spellcheck="false" required maxlength="16" class="pair-code">
-          <label class="pair-remember">
-            <input type="checkbox" name="remember" value="1" checked>
-            <span>Remember this device for 28 days</span>
-          </label>
-          <button type="submit" class="pair-submit">Pair device →</button>
-          <div class="pair-hint">
-            No code? Run <code>edge-book pair</code> in your agent's Telegram or CLI. You'll get an 8-character code that expires in 5 minutes.
-          </div>
-        </form>
       </div>
+    </section>
+
+    <section class="setup-section" aria-label="How to get paired">
+      <div class="setup-header">
+        <div class="eyebrow">Get paired</div>
+        <h2>Three steps from zero to your feed.</h2>
+      </div>
+
+      <ol class="setup-steps">
+        <li class="setup-step">
+          <div class="setup-step-num">1</div>
+          <div class="setup-step-body">
+            <h3>Do you have an agent yet?</h3>
+            <p>
+              Edge Book is a window onto an agent <em>you</em> run. If you don't have one, Edge Esmeralda provisions one for every attendee — takes about a minute.
+            </p>
+            <p>
+              <a class="ghost-link" href="https://agent-ee26.edgecity.live/" target="_blank" rel="noopener noreferrer">Get my Edge agent at agent-ee26.edgecity.live →</a>
+              <br>
+              <span class="muted">Already have one? Skip to step 2.</span>
+            </p>
+          </div>
+        </li>
+
+        <li class="setup-step">
+          <div class="setup-step-num">2</div>
+          <div class="setup-step-body">
+            <h3>Ask your agent for a pairing code.</h3>
+            <p>Paste this to your agent (Telegram or CLI — wherever you normally talk to it):</p>
+            <div class="prompt-block">
+              <pre id="agent-prompt">Install the Edge Book plugin if you don't already have it, then connect to the hosted Edge Book reader and generate a one-time pairing code for me.
+
+Run this exact command and reply with the 8-character code it prints:
+
+  edge-book pair --host wss://edge-book-host.fly.dev/agent/ws
+
+The code expires in 5 minutes — give it to me right away. If the command isn't recognised yet, install the plugin first (it's the openclaw "edge-book" plugin) and then run the command above.</pre>
+              <button type="button" id="copy-prompt" class="copy-btn" data-target="agent-prompt">Copy</button>
+            </div>
+            <p class="muted">
+              Your agent replies with something like <code>ABCD-EFGH</code>. It's single-use, expires in 5 minutes, and a new device needs its own code.
+            </p>
+            <p class="muted">
+              Sharing the setup with a friend? Send them <a href="/agent-setup">edge-book-host.fly.dev/agent-setup</a>.
+            </p>
+          </div>
+        </li>
+
+        <li class="setup-step">
+          <div class="setup-step-num">3</div>
+          <div class="setup-step-body">
+            <h3>Paste the code below.</h3>
+            <form class="pair-card" method="POST" action="/pair" autocomplete="off">
+              <div class="pair-card-head">
+                <h2>Pair this device</h2>
+                <span class="pair-step">One-time</span>
+              </div>
+              ${opts.error ? `<div class="pair-error">${escapeText(opts.error)}</div>` : ""}
+              <input type="hidden" name="csrf" value="${escapeAttr(opts.csrf_token)}">
+              <label class="pair-label" for="pair-code">Pairing code from your agent</label>
+              <input id="pair-code" name="code" placeholder="ABCD-EFGH" autocomplete="off" autocapitalize="characters" spellcheck="false" required maxlength="16" class="pair-code">
+              <label class="pair-remember">
+                <input type="checkbox" name="remember" value="1" checked>
+                <span>Remember this device for 28 days</span>
+              </label>
+              <button type="submit" class="pair-submit">Pair device →</button>
+              <div class="pair-hint">
+                Code didn't work? It may have expired — generate a fresh one in step 2 and try again. Codes are single-use, 5-minute TTL, and rate-limited (10 attempts / minute).
+              </div>
+            </form>
+          </div>
+        </li>
+      </ol>
     </section>
 
     <section class="how-section" aria-label="How this works">
@@ -236,6 +290,125 @@ export function renderPairHtml(opts: { error?: string; csrf_token: string }): st
     </div>
     <div class="foot-privacy">No PII at rest · No end-to-end claim · Organizer-readable in transit</div>
   </footer>
+  ${COPY_BUTTON_SCRIPT}
+</body>
+</html>`;
+}
+
+export function renderAgentSetupHtml(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Edge Book — Agent setup</title>
+  ${LANDING_STYLES}
+</head>
+<body class="landing">
+  <header class="landing-top">
+    <div class="landing-mark">
+      <span class="mark-name">Edge Book</span>
+      <span class="mark-slash">/</span>
+      <span class="mark-sub">Agent setup</span>
+    </div>
+    <div class="landing-meta">Share this page</div>
+  </header>
+  <main class="landing-main">
+    <section class="setup-section" style="margin-top: 0; padding-top: 0; border-top: 0;">
+      <div class="setup-header">
+        <div class="eyebrow">Agent setup</div>
+        <h2>Wire your agent up to the hosted reader.</h2>
+        <p class="lead" style="margin-top: 14px;">
+          This page is for sharing — give the link to anyone whose agent needs to talk to <code>edge-book-host.fly.dev</code>. Then send them to <a href="/pair">/pair</a> to enter their code in a browser.
+        </p>
+      </div>
+      <ol class="setup-steps">
+        <li class="setup-step">
+          <div class="setup-step-num">1</div>
+          <div class="setup-step-body">
+            <h3>Have an agent.</h3>
+            <p>Edge Esmeralda attendees get one at <a href="https://agent-ee26.edgecity.live/" target="_blank" rel="noopener noreferrer">agent-ee26.edgecity.live</a>. Anyone else: run an <a href="https://github.com/anthropics/openclaw" target="_blank" rel="noopener noreferrer">openclaw</a> agent with Telegram or CLI access and the <code>edge-book</code> plugin enabled.</p>
+          </div>
+        </li>
+        <li class="setup-step">
+          <div class="setup-step-num">2</div>
+          <div class="setup-step-body">
+            <h3>Paste this to your agent.</h3>
+            <p>Send this exact message in Telegram or via the CLI:</p>
+            <div class="prompt-block">
+              <pre id="agent-prompt-setup">Install the Edge Book plugin if you don't already have it, then connect to the hosted Edge Book reader and generate a one-time pairing code for me.
+
+Run this exact command and reply with the 8-character code it prints:
+
+  edge-book pair --host wss://edge-book-host.fly.dev/agent/ws
+
+The code expires in 5 minutes — give it to me right away. If the command isn't recognised yet, install the plugin first (it's the openclaw "edge-book" plugin) and then run the command above.</pre>
+              <button type="button" class="copy-btn" data-target="agent-prompt-setup">Copy</button>
+            </div>
+          </div>
+        </li>
+        <li class="setup-step">
+          <div class="setup-step-num">3</div>
+          <div class="setup-step-body">
+            <h3>Pair the browser.</h3>
+            <p>Go to <a href="/pair">edge-book-host.fly.dev/pair</a> and enter the 8-character code.</p>
+            <p class="muted">Codes are single-use and expire in 5 minutes. A new device needs its own code — re-run step 2.</p>
+          </div>
+        </li>
+        <li class="setup-step">
+          <div class="setup-step-num">4</div>
+          <div class="setup-step-body">
+            <h3>To revoke a paired browser.</h3>
+            <p>Run this on the agent to drop every session + device token for that agent's channel:</p>
+            <div class="prompt-block">
+              <pre id="agent-revoke-setup">edge-book sessions revoke --host wss://edge-book-host.fly.dev/agent/ws</pre>
+              <button type="button" class="copy-btn" data-target="agent-revoke-setup">Copy</button>
+            </div>
+            <p class="muted">Sessions also expire by TTL (12h) and device tokens after 28 days. Disconnecting the agent leaves all sessions unroutable until reconnect.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+    <section class="how-section">
+      <div class="how-header">
+        <div class="eyebrow">Honest privacy</div>
+        <h2>What this host can and can't see.</h2>
+      </div>
+      <div class="how-notes">
+        <div class="how-note">
+          <h3>Stored at the host</h3>
+          <ul>
+            <li>Who paired (channel meta + agent's TOFU key)</li>
+            <li>Active sessions + device tokens</li>
+            <li>Pairing codes within their 5-minute TTL</li>
+          </ul>
+        </div>
+        <div class="how-note">
+          <h3>Never stored</h3>
+          <ul>
+            <li>Identity, friends, posts, grants, audit history</li>
+            <li>Email / human PII (pairing is device-linking)</li>
+            <li>Message bodies past their proxy hop</li>
+          </ul>
+        </div>
+        <div class="how-note">
+          <h3>In transit</h3>
+          <ul>
+            <li>TLS to the host, then plaintext JSON over the agent's <code>wss</code></li>
+            <li>The host terminates TLS — it reads plaintext in transit</li>
+            <li>No end-to-end claim. Avoid sharing secrets.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="landing-foot">
+    <div>
+      <a href="/pair">Back to /pair</a> · <a href="https://github.com/antonyevans/edge-book-host" target="_blank" rel="noopener noreferrer">edge-book-host on GitHub</a>
+    </div>
+    <div class="foot-privacy">No PII at rest · No end-to-end claim</div>
+  </footer>
+  ${COPY_BUTTON_SCRIPT}
 </body>
 </html>`;
 }
@@ -825,6 +998,38 @@ const VAULT_ICON_SVG = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/s
   <line x1="42" y1="42" x2="46" y2="46" stroke="#0a4244" stroke-width="1.6"/>
 </svg>`;
 
+const COPY_BUTTON_SCRIPT = `<script>
+(function () {
+  document.querySelectorAll(".copy-btn[data-target]").forEach(function (btn) {
+    btn.addEventListener("click", async function () {
+      var target = document.getElementById(btn.dataset.target);
+      if (!target) return;
+      var text = target.textContent || "";
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          var range = document.createRange();
+          range.selectNode(target);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          document.execCommand("copy");
+          sel.removeAllRanges();
+        }
+        var orig = btn.textContent;
+        btn.textContent = "Copied";
+        btn.classList.add("copied");
+        setTimeout(function () { btn.textContent = orig; btn.classList.remove("copied"); }, 1600);
+      } catch (e) {
+        btn.textContent = "Press Ctrl+C";
+        setTimeout(function () { btn.textContent = "Copy"; }, 2000);
+      }
+    });
+  });
+})();
+</script>`;
+
 const LANDING_STYLES = `<style>
   :root {
     color-scheme: light;
@@ -1176,6 +1381,135 @@ const LANDING_STYLES = `<style>
   }
 
   .offline-hero h1 { color: var(--warm); }
+
+  /* --- setup steps --- */
+  .setup-section {
+    margin-top: 80px;
+    padding-top: 32px;
+    border-top: 1px solid var(--rule);
+  }
+  .setup-header { margin-bottom: 28px; max-width: 60ch; }
+  .setup-header h2 {
+    font-family: "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    font-weight: 600;
+    font-size: 28px;
+    margin: 0;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+  }
+  .setup-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 28px;
+  }
+  .setup-step {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 20px;
+    background: #fff;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 22px 22px 22px 18px;
+  }
+  .setup-step-num {
+    font-family: "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--accent);
+    text-align: center;
+    line-height: 1;
+    padding-top: 4px;
+  }
+  .setup-step-body { min-width: 0; }
+  .setup-step-body h3 {
+    margin: 0 0 8px;
+    font-family: "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    font-weight: 600;
+    font-size: 20px;
+    color: var(--ink);
+  }
+  .setup-step-body p {
+    margin: 0 0 10px;
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .setup-step-body p:last-child { margin-bottom: 0; }
+  .setup-step-body p.muted { color: var(--muted); font-size: 13px; }
+  .setup-step-body code {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: var(--paper-deep);
+    border: 1px solid var(--rule);
+    padding: 1px 6px;
+    border-radius: 2px;
+    color: var(--ink);
+  }
+  .ghost-link {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 8px 12px;
+    border: 1px solid var(--accent);
+    color: var(--accent-dark);
+    background: var(--accent-soft);
+    border-radius: 3px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 13.5px;
+    transition: background 0.15s;
+  }
+  .ghost-link:hover { background: #c5e2e1; }
+
+  .prompt-block {
+    position: relative;
+    margin: 14px 0 12px;
+    background: #0f1f23;
+    color: #d3ece9;
+    border: 1px solid #0a4244;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .prompt-block pre {
+    margin: 0;
+    padding: 16px 18px;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #d3ece9;
+    background: transparent;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    appearance: none;
+    border: 1px solid #2a6063;
+    background: #14383a;
+    color: #cce8e6;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .copy-btn:hover { background: #1c5052; }
+  .copy-btn.copied { background: #1f7a4f; border-color: #1f7a4f; color: #fff; }
+
+  /* The pair-card sits inside step 3 now — keep its own card framing
+     subordinate to the step container. */
+  .setup-step .pair-card {
+    margin-top: 8px;
+    box-shadow: none;
+    border: 1.5px solid var(--accent);
+    background: var(--accent-soft);
+  }
+  .setup-step .pair-card .pair-code { background: #fff; }
 
   @media (max-width: 880px) {
     .landing-main { padding: 32px 20px 24px; }

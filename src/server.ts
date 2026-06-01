@@ -6,7 +6,7 @@ import { HostStore } from "./store.js";
 import { ChannelRegistry } from "./channels.js";
 import { normalizePairingCode, randomToken } from "./tokens.js";
 import { RateLimiter } from "./rate-limit.js";
-import { renderOfflineHtml, renderPairHtml, renderReaderHtml } from "./reader-html.js";
+import { renderAgentSetupHtml, renderOfflineHtml, renderPairHtml, renderReaderHtml } from "./reader-html.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -280,6 +280,10 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
     if (url.pathname === "/healthz") {
       sendJson(res, 200, { ok: true });
+      return;
+    }
+    if (url.pathname === "/agent-setup" && req.method === "GET") {
+      sendHtml(res, 200, renderAgentSetupHtml());
       return;
     }
     if (url.pathname === "/pair") {
