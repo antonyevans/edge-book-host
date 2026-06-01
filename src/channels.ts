@@ -8,6 +8,15 @@ const PING_INTERVAL_MS = 25_000;
 const MAX_MISSED_PONGS = 2;
 const MAX_CONNECTIONS_PER_CHANNEL = 4;
 
+// Short, non-sensitive channel handle for logs (sha256 prefix; never the key).
+function cref(channel_id: string): string {
+  return channel_id.slice(0, 12);
+}
+function logEvent(event: string, fields: Record<string, string | number>): void {
+  const parts = Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(" ");
+  console.log(`[edge-book-host] ${event} ${parts}`);
+}
+
 export interface ApiRequest {
   method: string;
   path: string;
@@ -72,10 +81,11 @@ export class ChannelRegistry {
   // lifetime of host state — reconnects with a different key are rejected.
   // Does NOT evict existing connections; the new socket joins the stack and
   // becomes primary. Prior connections remain as live fallbacks.
-  attach(ws: WebSocket, agent_key: string, agent_did: string | null): { ok: true; channel_id: string } | { ok: false; error: string } {
+  attach(ws: WebSocket, agent_key: string, agent_did: string | null, remote = "?"): { ok: true; channel_id: string } | { ok: false; error: string } {
     const channel_id = channelIdFromKey(agent_key);
     const recorded = this.store.channelKey(channel_id);
     if (recorded && !timingSafeEqual(recorded, agent_key)) {
+      logEvent("agent_reject", { channel: cref(channel_id), reason: "agent_key_mismatch", remote });
       return { ok: false, error: "agent_key_mismatch" };
     }
     let channel = this.channels.get(channel_id);
@@ -103,6 +113,12 @@ export class ChannelRegistry {
     const conn: Connection = { ws, missedPongs: 0, heartbeat: null };
     channel.connections.push(conn);
     this.startHeartbeat(channel, conn);
+    logEvent("agent_attach", {
+      channel: cref(channel_id),
+      tofu: recorded ? "known" : "new",
+      conns: channel.connections.length,
+      remote
+    });
     return { ok: true, channel_id };
   }
 
@@ -124,6 +140,8 @@ export class ChannelRegistry {
         channel.pending.delete(request_id);
       }
     }
+    const remaining = channel.connections.filter((c) => c.ws.readyState === c.ws.OPEN).length;
+    logEvent("agent_detach", { channel: cref(channel_id), reason, conns_remaining: remaining });
     if (channel.connections.length === 0) {
       for (const pending of channel.pending.values()) {
         clearTimeout(pending.timer);
@@ -131,6 +149,7 @@ export class ChannelRegistry {
       }
       channel.pending.clear();
       this.channels.delete(channel_id);
+      logEvent("channel_empty", { channel: cref(channel_id) });
     }
   }
 
@@ -263,6 +282,7 @@ export class ChannelRegistry {
       conn.missedPongs++;
       if (conn.missedPongs > MAX_MISSED_PONGS) {
         clearInterval(interval);
+        logEvent("agent_heartbeat_timeout", { channel: cref(channel.channel_id), missed: conn.missedPongs });
         try { conn.ws.close(1011, "heartbeat_timeout"); } catch { /* ignore */ }
         return;
       }

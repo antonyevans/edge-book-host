@@ -368,12 +368,14 @@ server.on("upgrade", (req, socket, head) => {
     socket.destroy();
     return;
   }
-  wss.handleUpgrade(req, socket, head, (ws) => attachAgentSocket(ws));
+  const remote = clientIp(req);
+  wss.handleUpgrade(req, socket, head, (ws) => attachAgentSocket(ws, remote));
 });
 
-function attachAgentSocket(ws: import("ws").WebSocket): void {
+function attachAgentSocket(ws: import("ws").WebSocket, remote: string): void {
   let channel_id: string | null = null;
   const helloTimer = setTimeout(() => {
+    console.log(`[edge-book-host] agent_hello_timeout remote=${remote}`);
     try { ws.close(1002, "hello_timeout"); } catch { /* ignore */ }
   }, 10_000);
 
@@ -397,7 +399,7 @@ function attachAgentSocket(ws: import("ws").WebSocket): void {
         try { ws.send(JSON.stringify({ type: "hello_err", error: "missing_agent_key" })); ws.close(1002, "missing_agent_key"); } catch { /* ignore */ }
         return;
       }
-      const result = channels.attach(ws, agent_key, agent_did);
+      const result = channels.attach(ws, agent_key, agent_did, remote);
       if (!result.ok) {
         try { ws.send(JSON.stringify({ type: "hello_err", error: result.error })); ws.close(1008, result.error); } catch { /* ignore */ }
         return;
