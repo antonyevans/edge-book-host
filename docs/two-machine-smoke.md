@@ -248,3 +248,32 @@ When all phases PASS:
 - Claude (host session) updates `tasks/ea/ea-openclaw-026-design-edge-book-remote-hosting-auth.md`
   Acceptance Criteria + Latest Progress, and proposes the closeout commit.
 - The task moves from `status: active` → `status: completed`.
+
+---
+
+## Result — 2026-06-01: ALL 10 PHASES PASS ✅
+
+Run jointly: Claude (host, WSL) + openclaw agent (real dial-out) + Antony
+(desktop + phone-on-cellular browsers). Host live at
+`https://edge-book-host.fly.dev` (Fly `sjc`).
+
+| Phase | Verdict | Note |
+|---|---|---|
+| 0 Pre-flight | PASS | healthz ok, logs streaming |
+| 1 Cold dial-out | PASS | same key → same `channel_id` on reconnect; TOFU key `0600` |
+| 2 Pair | PASS | `ebh_session`/`ebh_device` HttpOnly+Secure+SameSite=Lax (DevTools) |
+| 3 Read golden path | PASS | all `/api/*` 200, owner DID matches — caught `private_key_pem` leak |
+| 4 Write/mutation | PASS | private draft landed on agent `posts.json`; CSRF enforced |
+| 5 Concurrent correlation | PASS | 20 concurrent `/api/feed`, bodies identical |
+| 6 Agent offline | PASS | 502 + honest offline page; same-key resume, no re-pair |
+| 7 Revoke | PASS | 401 + device-token dead (fresh tab does not auto-resume) |
+| 8 Pairing-code hygiene | PASS | TTL expiry, rate-limit 11th→429 (5-min lockout), single-use |
+| 9 Security spot checks | PASS | CSP/HSTS/X-Frame=DENY/X-CTO/Referrer; 401 unauth; 403 missing-CSRF |
+| 10 Mobile + multi-device | PASS | responsive; phone+desktop concurrent; revoke kills both at once |
+
+**Issues surfaced → all tracked `ea-claude-049..057`; 6 fixed live, 3 deferred
+(non-blocking).** Host commits `df2b9a3` (key redaction), `6ba23a9`
+(multi-connection stack), `a406689` (observability). Agent commits `c1e254b`,
+`1d43c48`, `5b9d7c9`.
+
+ea-openclaw-026 → `status: completed`.
