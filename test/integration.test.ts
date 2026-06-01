@@ -207,6 +207,25 @@ test("redaction: host strips a leaked private key from an /api/* response (ea-cl
   agent.close();
 });
 
+test("venue: many successful pairs from one IP never trigger 429 (ea-claude-058)", async () => {
+  const agent = await spawnAgent(ctx.wsUrl, {
+    handle: (frame, send) => {
+      if (frame.type === "api_request") {
+        send({ type: "api_response", request_id: frame.request_id, status: 200, headers: {}, body_b64: Buffer.from("{}").toString("base64") });
+      }
+    }
+  });
+  // 12 > the 10/min limit. Under failure-only counting + reset-on-success,
+  // every one of these legitimate pairs succeeds (simulates a crowd behind one
+  // shared egress IP, which in tests is 127.0.0.1).
+  for (let i = 0; i < 12; i++) {
+    const jarObj = jar();
+    await pair(agent.channel_id, jarObj, (code) => agent.ws.send(JSON.stringify({ type: "pair_register", code, ttl_ms: 60_000, request_id: `r${i}` })));
+    // pair() asserts 303 + session/device cookies internally; a 429 would throw.
+  }
+  agent.close();
+});
+
 test("multi-connection: a transient second socket on the same key does not orphan the channel (ea-claude-055)", async () => {
   const key = "ed25519:shared-key-055";
   const answer = (who: string) => (frame: Record<string, unknown>, send: (f: Record<string, unknown>) => void) => {

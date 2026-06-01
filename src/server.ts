@@ -214,9 +214,13 @@ async function handlePair(req: http.IncomingMessage, res: http.ServerResponse, u
     sendJson(res, 405, { ok: false, error: "method_not_allowed" });
     return;
   }
-  const limit = pairLimiter.check(clientIp(req));
-  if (!limit.allowed) {
-    sendHtml(res, 429, renderPairHtml({ csrf_token: "", error: `Too many attempts. Try again in ${Math.ceil(limit.retry_after_ms / 1000)}s.` }));
+  const ip = clientIp(req);
+  // Read-only gate: only a prior run of FAILED attempts locks an IP out, so
+  // many people pairing successfully behind one shared egress IP (venue wifi)
+  // never trip this. (ea-claude-058)
+  const gate = pairLimiter.peek(ip);
+  if (!gate.allowed) {
+    sendHtml(res, 429, renderPairHtml({ csrf_token: "", error: `Too many attempts. Try again in ${Math.ceil(gate.retry_after_ms / 1000)}s.` }));
     return;
   }
   let body: Buffer;
@@ -224,15 +228,20 @@ async function handlePair(req: http.IncomingMessage, res: http.ServerResponse, u
   const form = parseForm(body);
   const cookies = readCookies(req);
   if (!form.csrf || !cookies["ebh_pair_csrf"] || form.csrf !== cookies["ebh_pair_csrf"]) {
+    // A stale/missing CSRF token is a benign fumble, not a guess — don't count it.
     sendHtml(res, 403, renderPairHtml({ csrf_token: "", error: "Session expired. Reload and try again." }));
     return;
   }
   const code = normalizePairingCode(form.code || "");
   const channel_id = store.consumePairingCode(code);
   if (!channel_id) {
+    // A wrong/expired code IS a guess — count it toward the lockout.
+    pairLimiter.recordFailure(ip);
     sendHtml(res, 400, renderPairHtml({ csrf_token: cookies["ebh_pair_csrf"] || randomToken(16), error: "Invalid or expired code. Run `edge-book pair` on your agent for a fresh one." }));
     return;
   }
+  // Successful pair — clear this IP's failure budget so it never accumulates.
+  pairLimiter.reset(ip);
   // Bind a session.
   const session_id = randomToken();
   const csrf_token = randomToken();
