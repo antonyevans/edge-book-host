@@ -1,0 +1,42 @@
+{
+  "name": "edge-book",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first Edge Book agent network prototype.",
+  "bin": {
+    "edge-book": "./bin/edge-book.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "harness": "node bin/edge-book.js harness two-agent"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ],
+    "install": {
+      "npmSpec": "edge-book",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.5.22"
+    },
+    "compat": {
+      "pluginApi": ">=2026.5.22"
+    }
+  },
+  "files": [
+    "bin/**",
+    "src/**",
+    "index.js",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "openclaw": ">=2026.5.22"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  }
+}
