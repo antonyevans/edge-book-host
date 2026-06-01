@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.github
+data
+*.log
+.env
+.env.*
+vendor
+test
+docs
+.vscode

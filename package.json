@@ -1,0 +1,28 @@
+{
+  "name": "edge-book-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Edge Book hosted reader + pairing-code auth. Serves the reader UX; proxies /api/* to the bound agent over a dial-out websocket. Holds no social graph at rest.",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "test": "tsx --test test/tokens.test.ts test/store.test.ts test/integration.test.ts",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "cookie": "0.6.0",
+    "ws": "8.18.0"
+  },
+  "devDependencies": {
+    "@types/cookie": "0.6.0",
+    "@types/node": "20.14.10",
+    "@types/ws": "8.5.12",
+    "tsx": "4.19.2",
+    "typescript": "5.5.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
