@@ -105,6 +105,43 @@ function redirect(res: http.ServerResponse, location: string): void {
   res.end();
 }
 
+// Defense-in-depth: an agent must never ship its signing key, but if a buggy
+// /api/* handler does, the host strips it before relaying to the browser.
+// Primary fix lives in the agent's /api/me handler (ea-claude-050).
+const SECRET_KEY_RE = /private[_-]?key|secret|seed|mnemonic|passphrase/i;
+const PEM_PRIVATE_SRC = "-----BEGIN[^-]*PRIVATE KEY-----[\\s\\S]*?-----END[^-]*PRIVATE KEY-----";
+
+function deepRedactSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(deepRedactSecrets);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (SECRET_KEY_RE.test(k)) continue;
+      out[k] = deepRedactSecrets(v);
+    }
+    return out;
+  }
+  if (typeof value === "string" && new RegExp(PEM_PRIVATE_SRC).test(value)) {
+    return "[redacted-by-host]";
+  }
+  return value;
+}
+
+function redactSecretsFromBody(buf: Buffer, contentType: string | undefined): Buffer {
+  const ct = (contentType || "").toLowerCase();
+  if (ct.includes("application/json")) {
+    try {
+      const cleaned = deepRedactSecrets(JSON.parse(buf.toString("utf8")));
+      return Buffer.from(JSON.stringify(cleaned), "utf8");
+    } catch {
+      /* not parseable JSON — fall through to raw PEM scrub */
+    }
+  }
+  const text = buf.toString("utf8");
+  const scrubbed = text.replace(new RegExp(PEM_PRIVATE_SRC, "g"), "[redacted-by-host]");
+  return scrubbed === text ? buf : Buffer.from(scrubbed, "utf8");
+}
+
 async function readBody(req: http.IncomingMessage, limit = 1024 * 1024): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let total = 0;
@@ -255,12 +292,18 @@ async function handleApiProxy(req: http.IncomingMessage, res: http.ServerRespons
     });
     setSecurityHeaders(res);
     const responseHeaders: Record<string, string> = {};
+    let contentType: string | undefined;
     for (const [k, v] of Object.entries(response.headers || {})) {
-      if (FORWARD_HEADER_DENYLIST.has(k.toLowerCase())) continue;
-      if (typeof v === "string") responseHeaders[k] = v;
+      const lk = k.toLowerCase();
+      if (FORWARD_HEADER_DENYLIST.has(lk)) continue;
+      if (lk === "content-length") continue; // recomputed after redaction
+      if (typeof v !== "string") continue;
+      if (lk === "content-type") contentType = v;
+      responseHeaders[k] = v;
     }
+    const outBody = redactSecretsFromBody(Buffer.from(response.body_b64, "base64"), contentType);
     res.writeHead(response.status, responseHeaders);
-    res.end(Buffer.from(response.body_b64, "base64"));
+    res.end(outBody);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === "agent_offline" || msg.startsWith("channel_closed")) {

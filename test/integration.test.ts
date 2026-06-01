@@ -168,6 +168,45 @@ test("isolation: a session bound to agent A cannot reach agent B's data", async 
   b.close();
 });
 
+test("redaction: host strips a leaked private key from an /api/* response (ea-claude-050)", async () => {
+  const pem = "-----BEGIN PRIVATE KEY-----\nMIIBVgIBADANBg\n-----END PRIVATE KEY-----";
+  const agent = await spawnAgent(ctx.wsUrl, {
+    handle: (frame, send) => {
+      if (frame.type !== "api_request") return;
+      // A buggy agent leaks both a secret-named field and a raw PEM block.
+      send({
+        type: "api_response",
+        request_id: frame.request_id,
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body_b64: Buffer.from(JSON.stringify({
+          identity: {
+            did: "did:openclaw:abc",
+            handle: "leaky.local",
+            public_key: "ed25519:pub",
+            private_key_pem: pem,
+            nested: { secret: "shhh", api_secret_key: "x" }
+          }
+        })).toString("base64")
+      });
+    }
+  });
+  const jarObj = jar();
+  await pair(agent.channel_id, jarObj, (code) => agent.ws.send(JSON.stringify({ type: "pair_register", code, ttl_ms: 60_000, request_id: "r" })));
+  await new Promise((r) => setTimeout(r, 50));
+
+  const res = await fetch(`${ctx.baseUrl}/api/me`, { headers: { cookie: jarObj.header() } });
+  const raw = await res.text();
+  assert.equal(res.status, 200);
+  assert.ok(!/private[_-]?key/i.test(raw), "no private_key field survives");
+  assert.ok(!raw.includes("PRIVATE KEY"), "no PEM private block survives");
+  assert.ok(!raw.includes("shhh"), "secret-named field stripped");
+  const body = JSON.parse(raw);
+  assert.equal(body.identity.did, "did:openclaw:abc", "public fields preserved");
+  assert.equal(body.identity.public_key, "ed25519:pub", "public key preserved");
+  agent.close();
+});
+
 test("request-ID correlation: 20 concurrent calls return matched bodies under randomized agent latency", async () => {
   const agent = await spawnAgent(ctx.wsUrl, {
     handle: (frame, send) => {
