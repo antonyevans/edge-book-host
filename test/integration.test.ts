@@ -207,6 +207,37 @@ test("redaction: host strips a leaked private key from an /api/* response (ea-cl
   agent.close();
 });
 
+test("multi-connection: a transient second socket on the same key does not orphan the channel (ea-claude-055)", async () => {
+  const key = "ed25519:shared-key-055";
+  const answer = (who: string) => (frame: Record<string, unknown>, send: (f: Record<string, unknown>) => void) => {
+    if (frame.type === "api_request") {
+      send({ type: "api_response", request_id: frame.request_id, status: 200, headers: { "content-type": "application/json" }, body_b64: Buffer.from(JSON.stringify({ who })).toString("base64") });
+    }
+  };
+  // Persistent dial-out holds the channel.
+  const primary = await spawnAgent(ctx.wsUrl, { agent_key: key, handle: answer("primary") });
+  const jarObj = jar();
+  await pair(primary.channel_id, jarObj, (code) => primary.ws.send(JSON.stringify({ type: "pair_register", code, ttl_ms: 60_000, request_id: "r" })));
+  await new Promise((r) => setTimeout(r, 50));
+  let r = await fetch(`${ctx.baseUrl}/api/feed`, { headers: { cookie: jarObj.header() } });
+  assert.equal(r.status, 200, "channel serves before the second socket");
+
+  // A short-lived second socket on the SAME key (simulates `edge-book pair` minting a code).
+  const second = await spawnAgent(ctx.wsUrl, { agent_key: key, handle: answer("second") });
+  assert.equal(second.channel_id, primary.channel_id, "same key -> same channel");
+  await new Promise((r) => setTimeout(r, 30));
+  // It leaves.
+  second.ws.close();
+  await new Promise((r) => setTimeout(r, 100));
+
+  // The channel must survive on the persistent dial-out — no orphan, no 502.
+  r = await fetch(`${ctx.baseUrl}/api/feed`, { headers: { cookie: jarObj.header() } });
+  assert.equal(r.status, 200, "channel survived the transient socket leaving");
+  const body = await r.json();
+  assert.equal(body.who, "primary", "fell back to the persistent dial-out");
+  primary.close();
+});
+
 test("request-ID correlation: 20 concurrent calls return matched bodies under randomized agent latency", async () => {
   const agent = await spawnAgent(ctx.wsUrl, {
     handle: (frame, send) => {

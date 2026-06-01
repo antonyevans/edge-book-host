@@ -407,12 +407,12 @@ function attachAgentSocket(ws: import("ws").WebSocket): void {
       try { ws.send(JSON.stringify({ type: "hello_ok", channel_id, server_time: new Date().toISOString() })); } catch { /* ignore */ }
       return;
     }
-    channels.handleFrame(channel_id, frame);
+    channels.handleFrame(channel_id, ws, frame);
   });
 
   ws.on("close", () => {
     clearTimeout(helloTimer);
-    if (channel_id) channels.detach(channel_id, "socket_closed");
+    if (channel_id) channels.detachConnection(channel_id, ws, "socket_closed");
   });
   ws.on("error", () => { /* covered by close */ });
 }
