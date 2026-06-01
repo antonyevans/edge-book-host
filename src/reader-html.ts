@@ -127,41 +127,115 @@ export function renderPairHtml(opts: { error?: string; csrf_token: string }): st
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Edge Book — Pair this device</title>
-  ${READER_STYLES}
+  ${LANDING_STYLES}
 </head>
-<body>
-  <div class="app">
-    <header>
-      <div class="top-inner">
-        <div class="product-mark">
-          <h1>Edge Book</h1>
-          <div class="product-subtitle">Pair this device with your agent</div>
+<body class="landing">
+  <header class="landing-top">
+    <div class="landing-mark">
+      <span class="mark-name">Edge Book</span>
+      <span class="mark-slash">/</span>
+      <span class="mark-sub">Hosted Reader</span>
+    </div>
+    <div class="landing-meta">Edge Esmeralda · June 2026</div>
+  </header>
+
+  <main class="landing-main">
+    <section class="landing-hero">
+      <div class="hero-art" aria-hidden="true">${FLOATING_ISLAND_SVG}</div>
+      <div class="hero-copy">
+        <div class="eyebrow">Local-first agent social workspace</div>
+        <h1>Read your social layer<br>from anywhere.<br><span class="hero-accent">Stored only on your agent.</span></h1>
+        <p class="lead">
+          Edge Book lives on the always-on agent you already run. This host serves the reader and forwards each request to <em>your</em> agent over an authenticated channel — it holds nothing of your friends, posts, or messages at rest.
+        </p>
+
+        <form class="pair-card" method="POST" action="/pair" autocomplete="off">
+          <div class="pair-card-head">
+            <h2>Pair this device</h2>
+            <span class="pair-step">One-time</span>
+          </div>
+          ${opts.error ? `<div class="pair-error">${escapeText(opts.error)}</div>` : ""}
+          <input type="hidden" name="csrf" value="${escapeAttr(opts.csrf_token)}">
+          <label class="pair-label" for="pair-code">Pairing code from your agent</label>
+          <input id="pair-code" name="code" placeholder="ABCD-EFGH" autocomplete="off" autocapitalize="characters" spellcheck="false" required maxlength="16" class="pair-code">
+          <label class="pair-remember">
+            <input type="checkbox" name="remember" value="1" checked>
+            <span>Remember this device for 28 days</span>
+          </label>
+          <button type="submit" class="pair-submit">Pair device →</button>
+          <div class="pair-hint">
+            No code? Run <code>edge-book pair</code> in your agent's Telegram or CLI. You'll get an 8-character code that expires in 5 minutes.
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="how-section" aria-label="How this works">
+      <div class="how-header">
+        <div class="eyebrow">How this works</div>
+        <h2>Your data never lands on this host.</h2>
+      </div>
+      <div class="pipe-diagram" aria-hidden="true">
+        <div class="pipe-node pipe-browser">
+          <div class="pipe-icon">${BROWSER_ICON_SVG}</div>
+          <div class="pipe-name">This browser</div>
+          <div class="pipe-role">You, paired</div>
+        </div>
+        <div class="pipe-arrow">
+          <div class="pipe-line"></div>
+          <div class="pipe-label">TLS · plaintext in transit</div>
+        </div>
+        <div class="pipe-node pipe-host">
+          <div class="pipe-icon">${HOST_ICON_SVG}</div>
+          <div class="pipe-name">edge-book.fly.dev</div>
+          <div class="pipe-role">Pipe only · zero graph at rest</div>
+        </div>
+        <div class="pipe-arrow">
+          <div class="pipe-line"></div>
+          <div class="pipe-label">wss · agent dials out</div>
+        </div>
+        <div class="pipe-node pipe-agent">
+          <div class="pipe-icon">${VAULT_ICON_SVG}</div>
+          <div class="pipe-name">Your agent</div>
+          <div class="pipe-role">Owns identity, friends, posts, audit log</div>
         </div>
       </div>
-    </header>
-    <div class="page" style="grid-template-columns: 1fr;">
-      <main>
-        <section class="composer" style="max-width: 480px; margin: 24px auto;">
-          <h2 style="margin-bottom: 8px;">Enter your pairing code</h2>
-          <div class="view-copy" style="margin-bottom: 12px;">
-            Run <code>edge-book pair</code> on your agent (via Telegram/CLI). Your agent will reply with an 8-character code. Enter it below to link this browser.
-          </div>
-          ${opts.error ? `<div class="error" style="margin-bottom: 12px;">${escapeText(opts.error)}</div>` : ""}
-          <form method="POST" action="/pair">
-            <input type="hidden" name="csrf" value="${escapeAttr(opts.csrf_token)}">
-            <input name="code" placeholder="ABCD-EFGH" autocomplete="off" autocapitalize="characters" spellcheck="false" required maxlength="16" style="text-transform: uppercase; font-size: 18px; letter-spacing: 1px;">
-            <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)">
-              <input type="checkbox" name="remember" value="1" checked> Remember this device for 28 days
-            </label>
-            <button type="submit" class="primary">Pair device</button>
-          </form>
-          <div class="view-copy" style="margin-top: 16px;">
-            <strong>Privacy.</strong> This host serves the reader and proxies API calls to your agent. It holds no friends, posts, or messages at rest — only who connected and how to authenticate them.
-          </div>
-        </section>
-      </main>
+      <div class="how-notes">
+        <div class="how-note">
+          <h3>What the host stores</h3>
+          <ul>
+            <li>Who paired (channel meta, agent's TOFU key)</li>
+            <li>Active sessions + device tokens</li>
+            <li>That's it.</li>
+          </ul>
+        </div>
+        <div class="how-note">
+          <h3>What the host never stores</h3>
+          <ul>
+            <li>Identity, friendship, posts, grants, audit history</li>
+            <li>Your email — there isn't one, pairing is device-linking</li>
+            <li>Pairing codes past their 5-minute TTL</li>
+          </ul>
+        </div>
+        <div class="how-note">
+          <h3>Honest privacy</h3>
+          <ul>
+            <li>Organizer-readable <em>in transit</em></li>
+            <li>Owned at rest in your agent's filesystem</li>
+            <li>No end-to-end claim. Avoid sharing secrets.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="landing-foot">
+    <div>
+      Built for <a href="https://www.edgecity.live/" target="_blank" rel="noopener noreferrer">Edge Esmeralda</a>.
+      Local-first social via <a href="https://github.com/antonyevans/edge-book-host" target="_blank" rel="noopener noreferrer">edge-book-host</a>.
     </div>
-  </div>
+    <div class="foot-privacy">No PII at rest · No end-to-end claim · Organizer-readable in transit</div>
+  </footer>
 </body>
 </html>`;
 }
@@ -173,28 +247,36 @@ export function renderOfflineHtml(): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Edge Book — Agent offline</title>
-  ${READER_STYLES}
+  ${LANDING_STYLES}
 </head>
-<body>
-  <div class="app">
-    <header>
-      <div class="top-inner">
-        <div class="product-mark">
-          <h1>Edge Book</h1>
-          <div class="product-subtitle">Agent offline</div>
-        </div>
-      </div>
-    </header>
-    <div class="page" style="grid-template-columns: 1fr;">
-      <main>
-        <section class="composer" style="max-width: 480px; margin: 24px auto;">
-          <h2>Your agent isn't connected</h2>
-          <div class="view-copy">The reader is reachable, but your bound agent's dial-out connection is down. The host holds nothing of your social graph at rest, so there's nothing to show until your agent reconnects.</div>
-          <div class="view-copy" style="margin-top:12px"><a href="/">Retry</a></div>
-        </section>
-      </main>
+<body class="landing">
+  <header class="landing-top">
+    <div class="landing-mark">
+      <span class="mark-name">Edge Book</span>
+      <span class="mark-slash">/</span>
+      <span class="mark-sub">Hosted Reader</span>
     </div>
-  </div>
+    <div class="landing-meta">Agent offline</div>
+  </header>
+  <main class="landing-main">
+    <section class="landing-hero offline-hero">
+      <div class="hero-art" aria-hidden="true">${FLOATING_ISLAND_SVG}</div>
+      <div class="hero-copy">
+        <div class="eyebrow">Standing by</div>
+        <h1>Your agent isn't<br>connected.</h1>
+        <p class="lead">
+          The reader is reachable, but your bound agent's dial-out channel is down. The host holds nothing of your social graph at rest, so there's nothing to render until your agent reconnects.
+        </p>
+        <p class="lead">
+          <a class="pair-submit" href="/" style="display:inline-block;text-decoration:none">Retry →</a>
+        </p>
+      </div>
+    </section>
+  </main>
+  <footer class="landing-foot">
+    <div>Edge Book · hosted reader</div>
+    <div class="foot-privacy">No PII at rest · No end-to-end claim</div>
+  </footer>
 </body>
 </html>`;
 }
@@ -605,7 +687,517 @@ const READER_SCRIPT = `<script>
 })();
 </script>`;
 
-// Styles ported verbatim from vendor/reader-src/src/http.ts dashboardHtml().
+// ----------------------------------------------------------------------------
+// Landing-page assets (used by /pair and the agent-offline page).
+// Visual direction = "workshop console" (extends the reader aesthetic into a
+// more breathable hero), with a floating-island motif borrowed from the Edge
+// City visual identity. All assets inline so the strict CSP needs no remote
+// fetches.
+// ----------------------------------------------------------------------------
+
+const FLOATING_ISLAND_SVG = `<svg viewBox="0 0 480 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A small floating island carrying a cluster of buildings, suspended in a soft sky">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f5efe2"/>
+      <stop offset="0.7" stop-color="#fbfaf6"/>
+      <stop offset="1" stop-color="#fbfaf6"/>
+    </linearGradient>
+    <linearGradient id="rock" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6c5a48"/>
+      <stop offset="1" stop-color="#3b2f24"/>
+    </linearGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f8f6f"/>
+      <stop offset="1" stop-color="#2e6b53"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#dcefee" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#dcefee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="480" height="420" fill="url(#sky)"/>
+  <ellipse cx="240" cy="220" rx="220" ry="120" fill="url(#halo)"/>
+
+  <!-- distant clouds -->
+  <g fill="#ffffff" opacity="0.85">
+    <ellipse cx="80"  cy="120" rx="38" ry="9"/>
+    <ellipse cx="420" cy="90"  rx="44" ry="10"/>
+    <ellipse cx="380" cy="300" rx="30" ry="7"/>
+    <ellipse cx="60"  cy="280" rx="36" ry="8"/>
+  </g>
+
+  <!-- soft shadow under the island -->
+  <ellipse cx="240" cy="360" rx="150" ry="14" fill="#0a4244" opacity="0.10"/>
+
+  <!-- floating chunk: rock body -->
+  <g>
+    <path d="M120 230 Q150 200 200 195 Q260 188 310 198 Q360 206 360 232 L340 280 Q320 320 270 332 Q220 340 180 322 Q140 304 122 268 Z" fill="url(#rock)"/>
+    <!-- rock striations -->
+    <path d="M150 250 Q200 244 260 248 Q310 252 350 246" stroke="#2b2218" stroke-width="1.4" fill="none" opacity="0.55"/>
+    <path d="M170 278 Q220 274 280 280 Q320 284 340 276" stroke="#2b2218" stroke-width="1.2" fill="none" opacity="0.4"/>
+    <!-- dangling earth wisps -->
+    <path d="M205 322 Q210 350 200 380" stroke="#4a3a2c" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M275 332 Q282 358 268 388" stroke="#4a3a2c" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <path d="M325 308 Q336 332 326 352" stroke="#4a3a2c" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- grass cap -->
+  <path d="M122 226 Q160 196 220 192 Q280 188 330 200 Q358 208 360 228 Q330 222 295 220 Q240 217 195 222 Q150 226 122 230 Z" fill="url(#grass)"/>
+
+  <!-- buildings on the island -->
+  <!-- left house -->
+  <g>
+    <rect x="166" y="172" width="36" height="32" fill="#e8d9b8" stroke="#5b4632" stroke-width="1.2"/>
+    <polygon points="160,172 184,148 208,172" fill="#9a3412" stroke="#5b4632" stroke-width="1.2"/>
+    <rect x="178" y="184" width="8" height="20" fill="#5b4632"/>
+    <rect x="190" y="180" width="6" height="6" fill="#345995"/>
+    <rect x="172" y="180" width="6" height="6" fill="#345995"/>
+  </g>
+  <!-- center tower -->
+  <g>
+    <rect x="222" y="148" width="32" height="58" fill="#cfe6e3" stroke="#0a4244" stroke-width="1.3"/>
+    <polygon points="218,148 238,128 258,148" fill="#116466" stroke="#0a4244" stroke-width="1.3"/>
+    <rect x="230" y="160" width="6" height="8" fill="#0a4244"/>
+    <rect x="240" y="160" width="6" height="8" fill="#0a4244"/>
+    <rect x="230" y="178" width="6" height="8" fill="#0a4244"/>
+    <rect x="240" y="178" width="6" height="8" fill="#0a4244"/>
+    <rect x="232" y="194" width="12" height="14" fill="#0a4244"/>
+    <line x1="238" y1="128" x2="238" y2="116" stroke="#0a4244" stroke-width="1.4"/>
+    <circle cx="238" cy="115" r="2" fill="#116466"/>
+  </g>
+  <!-- right house -->
+  <g>
+    <rect x="274" y="178" width="34" height="28" fill="#e8d9b8" stroke="#5b4632" stroke-width="1.2"/>
+    <polygon points="270,178 291,158 312,178" fill="#7a5a3a" stroke="#5b4632" stroke-width="1.2"/>
+    <rect x="286" y="188" width="8" height="18" fill="#5b4632"/>
+    <rect x="276" y="186" width="6" height="6" fill="#345995"/>
+    <rect x="298" y="186" width="6" height="6" fill="#345995"/>
+  </g>
+  <!-- small tree -->
+  <g>
+    <rect x="324" y="194" width="3" height="12" fill="#5b4632"/>
+    <circle cx="326" cy="190" r="9" fill="#3f8f6f" stroke="#2e6b53" stroke-width="1"/>
+  </g>
+  <!-- tiny figure / antenna stand -->
+  <g>
+    <rect x="148" y="200" width="2" height="10" fill="#5b4632"/>
+    <circle cx="149" cy="198" r="2.5" fill="#9a3412"/>
+  </g>
+
+  <!-- close clouds in front of island -->
+  <g fill="#ffffff">
+    <ellipse cx="150" cy="345" rx="36" ry="8"/>
+    <ellipse cx="340" cy="355" rx="42" ry="9"/>
+  </g>
+</svg>`;
+
+const BROWSER_ICON_SVG = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <rect x="6" y="10" width="52" height="44" rx="3" fill="#fbfaf6" stroke="#0a4244" stroke-width="2"/>
+  <rect x="6" y="10" width="52" height="11" rx="3" fill="#116466"/>
+  <circle cx="12" cy="15.5" r="1.6" fill="#fbfaf6"/>
+  <circle cx="17" cy="15.5" r="1.6" fill="#fbfaf6"/>
+  <circle cx="22" cy="15.5" r="1.6" fill="#fbfaf6"/>
+  <rect x="14" y="28" width="36" height="3" fill="#0a4244" opacity="0.55"/>
+  <rect x="14" y="35" width="28" height="3" fill="#0a4244" opacity="0.35"/>
+  <rect x="14" y="42" width="32" height="3" fill="#0a4244" opacity="0.45"/>
+</svg>`;
+
+const HOST_ICON_SVG = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M8 28 L32 12 L56 28" fill="none" stroke="#0a4244" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="14" y="28" width="36" height="26" fill="#dcefee" stroke="#0a4244" stroke-width="2"/>
+  <path d="M20 54 L20 38 L28 38 L28 54 Z" fill="#116466"/>
+  <rect x="34" y="38" width="14" height="8" fill="#fbfaf6" stroke="#0a4244" stroke-width="1.4"/>
+  <line x1="32" y1="28" x2="32" y2="12" stroke="#116466" stroke-width="2"/>
+  <circle cx="32" cy="10" r="2" fill="#9a3412"/>
+</svg>`;
+
+const VAULT_ICON_SVG = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <rect x="8" y="10" width="48" height="44" rx="4" fill="#fbfaf6" stroke="#0a4244" stroke-width="2"/>
+  <circle cx="32" cy="32" r="13" fill="none" stroke="#0a4244" stroke-width="2"/>
+  <circle cx="32" cy="32" r="6" fill="#116466"/>
+  <line x1="32" y1="17" x2="32" y2="11" stroke="#0a4244" stroke-width="2"/>
+  <line x1="32" y1="47" x2="32" y2="53" stroke="#0a4244" stroke-width="2"/>
+  <line x1="17" y1="32" x2="11" y2="32" stroke="#0a4244" stroke-width="2"/>
+  <line x1="47" y1="32" x2="53" y2="32" stroke="#0a4244" stroke-width="2"/>
+  <line x1="22" y1="22" x2="18" y2="18" stroke="#0a4244" stroke-width="1.6"/>
+  <line x1="42" y1="22" x2="46" y2="18" stroke="#0a4244" stroke-width="1.6"/>
+  <line x1="22" y1="42" x2="18" y2="46" stroke="#0a4244" stroke-width="1.6"/>
+  <line x1="42" y1="42" x2="46" y2="46" stroke="#0a4244" stroke-width="1.6"/>
+</svg>`;
+
+const LANDING_STYLES = `<style>
+  :root {
+    color-scheme: light;
+    --paper: #fbfaf6;
+    --paper-deep: #f3eedf;
+    --ink: #12343b;
+    --ink-soft: #3b4f56;
+    --muted: #6b7a80;
+    --rule: #d8d2c1;
+    --accent: #116466;
+    --accent-dark: #0a4244;
+    --accent-soft: #dcefee;
+    --warm: #9a3412;
+    --warm-soft: #fff2e6;
+    --danger: #b42318;
+    --danger-soft: #fff1ee;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body.landing {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .landing-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper);
+  }
+  .landing-mark {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-family: "iA Writer Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    color: var(--ink);
+    font-size: 14px;
+    letter-spacing: 0.02em;
+  }
+  .mark-name { font-weight: 700; }
+  .mark-slash { color: var(--muted); }
+  .mark-sub { color: var(--muted); }
+  .landing-meta {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .landing-main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 48px 32px 32px;
+  }
+  .landing-hero {
+    display: grid;
+    grid-template-columns: 360px minmax(0, 1fr);
+    gap: 56px;
+    align-items: center;
+  }
+  .hero-art {
+    border: 1px solid var(--rule);
+    background: var(--paper-deep);
+    border-radius: 4px;
+    padding: 8px;
+    box-shadow: 0 1px 0 rgba(10, 66, 68, 0.06), 0 12px 32px rgba(10, 66, 68, 0.08);
+  }
+  .hero-art svg { display: block; width: 100%; height: auto; border-radius: 2px; }
+  .hero-copy { min-width: 0; }
+  .eyebrow {
+    display: inline-block;
+    padding: 4px 8px;
+    background: var(--accent-soft);
+    color: var(--accent-dark);
+    border: 1px solid #b7d8d7;
+    border-radius: 2px;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-family: "Iowan Old Style", "Source Serif Pro", "Georgia", serif;
+    font-weight: 600;
+    font-size: 44px;
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    margin: 0 0 18px;
+    color: var(--ink);
+  }
+  .hero-accent { color: var(--accent); }
+  .lead {
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    margin: 0 0 22px;
+    max-width: 58ch;
+  }
+  .lead em { font-style: italic; color: var(--ink); }
+  .pair-card {
+    background: #fff;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 22px 22px 20px;
+    margin-top: 8px;
+    box-shadow: 0 1px 0 rgba(10, 66, 68, 0.04), 0 12px 28px rgba(10, 66, 68, 0.08);
+    max-width: 560px;
+  }
+  .pair-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .pair-card-head h2 {
+    margin: 0;
+    font-family: "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    font-weight: 600;
+    font-size: 20px;
+    color: var(--ink);
+  }
+  .pair-step {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent-dark);
+    background: var(--accent-soft);
+    padding: 3px 6px;
+    border-radius: 2px;
+    border: 1px solid #b7d8d7;
+  }
+  .pair-label {
+    display: block;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 4px 0 6px;
+    font-weight: 600;
+  }
+  .pair-code {
+    width: 100%;
+    border: 1.5px solid var(--ink);
+    border-radius: 3px;
+    background: #fff;
+    color: var(--ink);
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 12px 14px;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .pair-code:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(17, 100, 102, 0.18);
+  }
+  .pair-remember {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 14px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .pair-remember input { accent-color: var(--accent); transform: translateY(0.5px); }
+  .pair-submit {
+    appearance: none;
+    border: 1px solid var(--accent-dark);
+    background: var(--accent);
+    color: #fff;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    padding: 10px 16px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.05s;
+  }
+  .pair-submit:hover { background: var(--accent-dark); }
+  .pair-submit:active { transform: translateY(1px); }
+  .pair-hint {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--rule);
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .pair-hint code {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    background: var(--paper-deep);
+    border: 1px solid var(--rule);
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .pair-error {
+    background: var(--danger-soft);
+    border: 1px solid #f0b5ae;
+    color: var(--danger);
+    padding: 10px 12px;
+    border-radius: 3px;
+    margin-bottom: 14px;
+    font-size: 13px;
+  }
+
+  .how-section {
+    margin-top: 96px;
+    padding-top: 32px;
+    border-top: 1px solid var(--rule);
+  }
+  .how-header { margin-bottom: 32px; max-width: 60ch; }
+  .how-header h2 {
+    font-family: "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    font-weight: 600;
+    font-size: 28px;
+    margin: 0;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+  }
+  .pipe-diagram {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    gap: 0;
+    align-items: center;
+    margin-bottom: 32px;
+  }
+  .pipe-node {
+    background: #fff;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 16px 14px;
+    text-align: center;
+    min-height: 156px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .pipe-host { border: 1.5px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .pipe-icon { width: 56px; height: 56px; }
+  .pipe-icon svg { width: 100%; height: 100%; }
+  .pipe-name {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .pipe-role {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+  .pipe-arrow {
+    position: relative;
+    height: 156px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .pipe-line {
+    width: 100%;
+    height: 2px;
+    background: var(--accent-dark);
+    position: relative;
+  }
+  .pipe-line::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    top: -5px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid var(--accent-dark);
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+  }
+  .pipe-label {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-22px);
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    background: var(--paper);
+    padding: 0 6px;
+  }
+
+  .how-notes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+    margin-top: 8px;
+  }
+  .how-note {
+    background: #fff;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 16px 18px;
+  }
+  .how-note h3 {
+    margin: 0 0 10px;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent-dark);
+  }
+  .how-note ul { margin: 0; padding-left: 18px; color: var(--ink-soft); }
+  .how-note li { margin-bottom: 4px; font-size: 13.5px; }
+  .how-note em { font-style: italic; color: var(--ink); }
+
+  .landing-foot {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 48px 32px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-top: 1px solid var(--rule);
+    margin-top: 48px;
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+  .landing-foot a { color: var(--ink-soft); }
+  .foot-privacy {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+
+  .offline-hero h1 { color: var(--warm); }
+
+  @media (max-width: 880px) {
+    .landing-main { padding: 32px 20px 24px; }
+    .landing-hero {
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
+    .hero-art { max-width: 320px; margin: 0 auto; }
+    h1 { font-size: 34px; }
+    .pipe-diagram { grid-template-columns: 1fr; gap: 12px; }
+    .pipe-arrow { display: none; }
+    .pipe-node { min-height: 0; padding: 14px; }
+    .how-notes { grid-template-columns: 1fr; }
+    .landing-foot { flex-direction: column; align-items: flex-start; padding: 32px 20px; }
+    .landing-top { padding: 14px 20px; flex-wrap: wrap; gap: 8px; }
+  }
+</style>`;
+
+// ----------------------------------------------------------------------------
+// Reader styles — ported verbatim from vendor/reader-src/src/http.ts
+// dashboardHtml(). Used inside the authenticated reader page.
+// ----------------------------------------------------------------------------
 const READER_STYLES = `<style>
 :root {
   color-scheme: light;
