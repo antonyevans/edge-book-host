@@ -238,6 +238,30 @@ export class ChannelRegistry {
     this.send(ws, { type: "error", error: "unknown_message_type", ref: typeof type === "string" ? type : null });
   }
 
+  // Idle stand-down: for every connected channel whose last HUMAN activity is
+  // older than idleMs, tell the agent to stand down and close its connections.
+  // The agent honors `stand_down` by suppressing reconnect until re-enabled or
+  // re-paired (ea-claude-061). Returns the channel_ids stood down.
+  sweepIdle(idleMs: number, now: number = Date.now()): string[] {
+    const stoodDown: string[] = [];
+    for (const channel_id of [...this.channels.keys()]) {
+      const meta = this.store.getChannel(channel_id);
+      // Reference point: last human activity, else first-ever connect.
+      const idleSince = meta?.last_active_at ?? meta?.first_seen_at ?? now;
+      if (now - idleSince <= idleMs) continue;
+      const channel = this.channels.get(channel_id);
+      if (!channel) continue;
+      logEvent("agent_stand_down", { channel: cref(channel_id), idle_ms: now - idleSince });
+      const frame = { type: "stand_down", reason: "idle_timeout", channel_id, idle_ms: now - idleSince };
+      for (const conn of channel.connections) {
+        this.send(conn.ws, frame);
+        try { conn.ws.close(1000, "idle_timeout"); } catch { /* ignore */ }
+      }
+      stoodDown.push(channel_id);
+    }
+    return stoodDown;
+  }
+
   // Most-recently-attached OPEN connection on a channel, if any.
   private primaryConn(channel_id: string): Connection | undefined {
     const channel = this.channels.get(channel_id);

@@ -25,6 +25,24 @@ test("pairing code expires on TTL", () => {
   assert.equal(store.consumePairingCode("CODE-EXPI"), null);
 });
 
+test("recordChannel preserves first_seen_at across reconnects; touchChannelActivity sets last_active_at (ea-061)", () => {
+  const store = new HostStore(tmpDir());
+  store.recordChannel({ channel_id: "chA", agent_key: "k", agent_did: null, first_seen_at: 1000, last_seen_at: 1000 });
+  // Reconnect with a later first_seen_at — must NOT overwrite the original.
+  store.recordChannel({ channel_id: "chA", agent_key: "k", agent_did: "did:x", first_seen_at: 9999, last_seen_at: 9999 });
+  const c = store.getChannel("chA")!;
+  assert.equal(c.first_seen_at, 1000, "first_seen_at is stable across reconnect");
+  assert.equal(c.agent_did, "did:x", "other fields update");
+  assert.equal(c.last_active_at, undefined, "no human activity yet");
+
+  store.touchChannelActivity("chA", 5000);
+  assert.equal(store.getChannel("chA")!.last_active_at, 5000);
+
+  // touch on an unknown channel is a no-op (no throw).
+  store.touchChannelActivity("nope", 5000);
+  assert.equal(store.getChannel("nope"), null);
+});
+
 test("revokeChannelSessions drops all sessions and device tokens for a channel", () => {
   const store = new HostStore(tmpDir());
   store.createSession({ session_id: "s1", channel_id: "chA", csrf_token: "c", expires_at: Date.now() + 60_000 });

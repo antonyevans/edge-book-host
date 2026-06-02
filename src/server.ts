@@ -30,7 +30,14 @@ const store = new HostStore(DATA_DIR);
 const channels = new ChannelRegistry(store);
 const pairLimiter = new RateLimiter(10, 60_000, 5 * 60_000);
 
+// Idle stand-down: a dial-out with no human activity (pair / authed /api/*) for
+// this long is told to disconnect and stop reconnecting (ea-claude-061).
+// Default 7 days; override with EDGE_BOOK_IDLE_MS. Session TTL 12h < idle 7d < device 28d.
+const IDLE_TIMEOUT_MS = Number(process.env.EDGE_BOOK_IDLE_MS) || 7 * 24 * 60 * 60 * 1000;
+const IDLE_SWEEP_MS = Number(process.env.EDGE_BOOK_IDLE_SWEEP_MS) || 60 * 60 * 1000; // hourly
+
 setInterval(() => store.purge(), 60_000).unref();
+setInterval(() => { try { channels.sweepIdle(IDLE_TIMEOUT_MS); } catch { /* ignore */ } }, IDLE_SWEEP_MS).unref();
 
 function setCookie(res: http.ServerResponse, name: string, value: string, ttl_ms: number): void {
   const parts = [
@@ -242,6 +249,8 @@ async function handlePair(req: http.IncomingMessage, res: http.ServerResponse, u
   }
   // Successful pair — clear this IP's failure budget so it never accumulates.
   pairLimiter.reset(ip);
+  // Human activity — resets the idle-timeout clock for this channel (ea-061).
+  store.touchChannelActivity(channel_id);
   // Bind a session.
   const session_id = randomToken();
   const csrf_token = randomToken();
@@ -271,6 +280,8 @@ async function handleLogout(req: http.IncomingMessage, res: http.ServerResponse,
 }
 
 async function handleApiProxy(req: http.IncomingMessage, res: http.ServerResponse, url: URL, session: AuthedSession): Promise<void> {
+  // Authenticated request — human activity, resets the idle clock (ea-061).
+  store.touchChannelActivity(session.channel_id);
   // CSRF required on mutations.
   if (req.method && req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
     if (!requireCsrf(req, session)) {

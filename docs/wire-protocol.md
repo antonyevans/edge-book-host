@@ -101,8 +101,29 @@ If the host receives an unknown `type`, it replies:
 ```
 The agent SHOULD log and continue; the channel is not closed.
 
+## Idle stand-down
+
+Host → Agent. When a channel has had **no human activity** (no successful pair
+and no authenticated `/api/*` request) for the idle window (default **7 days**,
+`EDGE_BOOK_IDLE_MS`), the host sends:
+```json
+{ "type": "stand_down", "reason": "idle_timeout", "channel_id": "<hex>", "idle_ms": 0 }
+```
+then closes the socket with code `1000`.
+
+On `stand_down` the agent MUST **stop reconnecting** — do not treat the
+subsequent close as a transient drop. The dial-out stays down until the human
+re-enables it or runs `pair` again (re-pairing re-establishes the channel and
+resets the idle clock). This bounds the window in which the host can reach the
+agent to *active use + the idle grace period*, rather than indefinitely.
+
+Note: agent attach and heartbeat do NOT count as activity — an agent that dials
+out but is never read still stands down after the idle window (measured from its
+first connect).
+
 ## Reconnect
 
-If the socket drops, the agent reconnects with exponential backoff (1s → 60s
-cap, full jitter). Same `agent_key` → same `channel_id` → existing sessions and
-device tokens for that channel keep routing without re-pairing.
+If the socket drops **without** a preceding `stand_down`, the agent reconnects
+with exponential backoff (1s → 60s cap, full jitter). Same `agent_key` → same
+`channel_id` → existing sessions and device tokens for that channel keep routing
+without re-pairing.

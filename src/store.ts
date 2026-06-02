@@ -26,6 +26,10 @@ export interface ChannelMeta {
   agent_did: string | null;
   first_seen_at: number;
   last_seen_at: number;
+  // Timestamp of the most recent HUMAN activity on this channel (successful pair
+  // or authenticated /api/* request). Drives the idle-timeout stand-down — it is
+  // NOT bumped by agent attach/heartbeat, so an agent nobody reads goes idle.
+  last_active_at?: number;
 }
 
 interface State {
@@ -178,12 +182,32 @@ export class HostStore {
 
   // --- channels ---
   recordChannel(meta: ChannelMeta): void {
-    this.state.channels[meta.channel_id] = meta;
+    const existing = this.state.channels[meta.channel_id];
+    this.state.channels[meta.channel_id] = {
+      ...meta,
+      // first_seen_at is set once (don't reset on reconnect) so the idle clock
+      // is stable for an agent that connects but is never read.
+      first_seen_at: existing?.first_seen_at ?? meta.first_seen_at,
+      // preserve human-activity timestamp across reconnects.
+      last_active_at: existing?.last_active_at
+    };
     this.scheduleFlush();
   }
 
   channelKey(channel_id: string): string | null {
     return this.state.channels[channel_id]?.agent_key ?? null;
+  }
+
+  getChannel(channel_id: string): ChannelMeta | null {
+    return this.state.channels[channel_id] ?? null;
+  }
+
+  // Record human activity (pair / authenticated /api/* request) on a channel.
+  touchChannelActivity(channel_id: string, now: number = Date.now()): void {
+    const c = this.state.channels[channel_id];
+    if (!c) return;
+    c.last_active_at = now;
+    this.scheduleFlush();
   }
 
   // For tests / inspection.

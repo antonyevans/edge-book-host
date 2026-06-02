@@ -1,6 +1,6 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { startServer, spawnAgent } from "./helpers.js";
+import { startServer, spawnAgent, channels } from "./helpers.js";
 
 let ctx: Awaited<ReturnType<typeof startServer>>;
 test.before(async () => { ctx = await startServer(); });
@@ -223,6 +223,64 @@ test("venue: many successful pairs from one IP never trigger 429 (ea-claude-058)
     await pair(agent.channel_id, jarObj, (code) => agent.ws.send(JSON.stringify({ type: "pair_register", code, ttl_ms: 60_000, request_id: `r${i}` })));
     // pair() asserts 303 + session/device cookies internally; a 429 would throw.
   }
+  agent.close();
+});
+
+test("idle timeout: host stands down a channel with no recent human activity (ea-claude-061)", async () => {
+  const agent = await spawnAgent(ctx.wsUrl, {
+    handle: (frame, send) => {
+      if (frame.type === "api_request") {
+        send({ type: "api_response", request_id: frame.request_id, status: 200, headers: {}, body_b64: Buffer.from("{}").toString("base64") });
+      }
+    }
+  });
+  const jarObj = jar();
+  await pair(agent.channel_id, jarObj, (code) => agent.ws.send(JSON.stringify({ type: "pair_register", code, ttl_ms: 60_000, request_id: "r" })));
+  await new Promise((r) => setTimeout(r, 50));
+
+  // Capture stand_down frames the agent receives.
+  const standDowns: Record<string, unknown>[] = [];
+  agent.ws.on("message", (raw) => {
+    const f = JSON.parse(raw.toString());
+    if (f.type === "stand_down") standDowns.push(f);
+  });
+
+  const IDLE = 7 * 24 * 60 * 60 * 1000;
+
+  // A sweep with "now" = real now must NOT stand down a just-paired channel.
+  assert.deepEqual(channels.sweepIdle(IDLE, Date.now()), [], "fresh channel is not idle");
+
+  // A sweep with "now" 8 days in the future → the channel is idle and stood down.
+  const future = Date.now() + 8 * 24 * 60 * 60 * 1000;
+  const stood = channels.sweepIdle(IDLE, future);
+  assert.ok(stood.includes(agent.channel_id), "idle channel is stood down");
+
+  await new Promise((r) => setTimeout(r, 60));
+  assert.ok(standDowns.length >= 1, "agent received a stand_down frame");
+  assert.equal(standDowns[0]!.reason, "idle_timeout");
+  assert.equal(channels.has(agent.channel_id), false, "channel closed after stand-down");
+});
+
+test("idle timeout: an authenticated request resets the idle clock (ea-claude-061)", async () => {
+  const agent = await spawnAgent(ctx.wsUrl, {
+    handle: (frame, send) => {
+      if (frame.type === "api_request") {
+        send({ type: "api_response", request_id: frame.request_id, status: 200, headers: {}, body_b64: Buffer.from("{}").toString("base64") });
+      }
+    }
+  });
+  const jarObj = jar();
+  await pair(agent.channel_id, jarObj, (code) => agent.ws.send(JSON.stringify({ type: "pair_register", code, ttl_ms: 60_000, request_id: "r" })));
+  await new Promise((r) => setTimeout(r, 50));
+
+  // Make a real authenticated request (touches activity = now).
+  const r = await fetch(`${ctx.baseUrl}/api/feed`, { headers: { cookie: jarObj.header() } });
+  assert.equal(r.status, 200);
+
+  // 6 days later: still within the 7d window → not idle.
+  const IDLE = 7 * 24 * 60 * 60 * 1000;
+  const sixDays = Date.now() + 6 * 24 * 60 * 60 * 1000;
+  assert.deepEqual(channels.sweepIdle(IDLE, sixDays), [], "activity kept the channel alive at 6 days");
   agent.close();
 });
 
