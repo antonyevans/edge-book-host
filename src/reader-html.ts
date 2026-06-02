@@ -224,6 +224,10 @@ The code expires in 5 minutes — give it to me right away. Keep the dial-out fr
                 Code didn't work? It may have expired — generate a fresh one in step 2 and try again. Codes are single-use, 5-minute TTL, and rate-limited (10 attempts / minute).
               </div>
             </form>
+            <div class="pair-qr">
+              <div class="pair-qr-code">${PAIR_QR_SVG}</div>
+              <div class="pair-qr-caption">On your phone? Scan to open this pairing page there.</div>
+            </div>
           </div>
         </li>
       </ol>
@@ -974,6 +978,9 @@ const FLOATING_ISLAND_SVG = `<svg viewBox="0 0 480 420" xmlns="http://www.w3.org
   </g>
 </svg>`;
 
+// Static QR for https://edge-book-host.fly.dev/pair (generated offline; no runtime dep).
+const PAIR_QR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 31 31" shape-rendering="crispEdges" role="img" aria-label="QR code linking to the pairing page"><path fill="#ffffff" d="M0 0h31v31H0z"/><path stroke="#0a4244" d="M1 1.5h7m2 0h1m5 0h5m2 0h7M1 2.5h1m5 0h1m2 0h1m1 0h2m4 0h1m4 0h1m5 0h1M1 3.5h1m1 0h3m1 0h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h3m1 0h1M1 4.5h1m1 0h3m1 0h1m1 0h2m7 0h1m2 0h1m1 0h1m1 0h3m1 0h1M1 5.5h1m1 0h3m1 0h1m1 0h1m1 0h1m2 0h3m2 0h3m1 0h1m1 0h3m1 0h1M1 6.5h1m5 0h1m1 0h1m4 0h3m1 0h1m2 0h1m1 0h1m5 0h1M1 7.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M9 8.5h6m4 0h2M1 9.5h1m1 0h5m5 0h1m1 0h4m2 0h1m1 0h5M2 10.5h4m2 0h2m7 0h7m1 0h1m3 0h1M3 11.5h1m3 0h1m3 0h2m3 0h2m3 0h1m1 0h3M5 12.5h1m2 0h1m2 0h1m3 0h2m2 0h3m2 0h3m1 0h1M1 13.5h2m3 0h2m2 0h3m5 0h1m1 0h1m5 0h2M2 14.5h1m1 0h2m4 0h1m1 0h1m1 0h2m1 0h2m1 0h6m3 0h1M3 15.5h1m1 0h1m1 0h4m2 0h5m1 0h1m2 0h1m1 0h1m1 0h2M1 16.5h1m1 0h1m7 0h4m1 0h1m5 0h4m2 0h1M2 17.5h4m1 0h1m1 0h3m1 0h1m1 0h2m1 0h3m5 0h2M1 18.5h1m1 0h2m3 0h2m1 0h1m1 0h1m3 0h9m1 0h1m1 0h1M1 19.5h1m3 0h1m1 0h1m1 0h3m1 0h1m2 0h1m1 0h1m2 0h1m1 0h1m1 0h1m1 0h1M1 20.5h1m1 0h4m1 0h1m2 0h1m1 0h1m1 0h2m2 0h1m1 0h1m1 0h3m2 0h1M1 21.5h1m1 0h2m2 0h1m5 0h1m2 0h3m1 0h6m1 0h3M9 22.5h2m2 0h3m1 0h1m1 0h1m1 0h1m3 0h5M1 23.5h7m4 0h6m2 0h2m1 0h1m1 0h3M1 24.5h1m5 0h1m1 0h2m1 0h1m1 0h1m2 0h1m1 0h1m1 0h1m3 0h1m3 0h1M1 25.5h1m1 0h3m1 0h1m1 0h1m3 0h1m1 0h1m2 0h1m2 0h5m1 0h2M1 26.5h1m1 0h3m1 0h1m1 0h2m3 0h1m4 0h3m4 0h4M1 27.5h1m1 0h3m1 0h1m1 0h2m4 0h2m4 0h8M1 28.5h1m5 0h1m3 0h1m1 0h3m1 0h1m3 0h1m1 0h4m1 0h1M1 29.5h7m1 0h1m3 0h6m1 0h1m2 0h3m1 0h1"/></svg>`;
+
 const BROWSER_ICON_SVG = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <rect x="6" y="10" width="52" height="44" rx="3" fill="#fbfaf6" stroke="#0a4244" stroke-width="2"/>
   <rect x="6" y="10" width="52" height="11" rx="3" fill="#116466"/>
@@ -1240,6 +1247,28 @@ const LANDING_STYLES = `<style>
     font-size: 12.5px;
     color: var(--muted);
     line-height: 1.55;
+  }
+  .pair-qr {
+    margin-top: 18px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .pair-qr-code {
+    flex: 0 0 auto;
+    width: 96px;
+    height: 96px;
+    padding: 8px;
+    background: #fff;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    line-height: 0;
+  }
+  .pair-qr-code svg { width: 100%; height: 100%; display: block; }
+  .pair-qr-caption {
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.5;
   }
   .pair-hint code {
     font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
