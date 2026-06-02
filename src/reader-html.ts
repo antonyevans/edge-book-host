@@ -179,13 +179,18 @@ export function renderPairHtml(opts: { error?: string; csrf_token: string }): st
             <h3>Ask your agent for a pairing code.</h3>
             <p>Paste this to your agent (Telegram or CLI — wherever you normally talk to it):</p>
             <div class="prompt-block">
-              <pre id="agent-prompt">Install the Edge Book plugin if you don't already have it, then connect to the hosted Edge Book reader and generate a one-time pairing code for me.
+              <pre id="agent-prompt">Connect to the hosted Edge Book reader and give me a one-time pairing code. Edge Book is on npm, so no manual install is needed — npx fetches it.
 
-Run this exact command and reply with the 8-character code it prints:
+1) Create my identity (first time only):
+  npx -y edge-book@latest init
 
-  edge-book pair --host wss://edge-book-host.fly.dev/agent/ws
+2) Start the dial-out and KEEP IT RUNNING (this is what the reader talks to):
+  npx -y edge-book@latest dialout --host wss://edge-book-host.fly.dev/agent/ws
 
-The code expires in 5 minutes — give it to me right away. If the command isn't recognised yet, install the plugin first (it's the openclaw "edge-book" plugin) and then run the command above.</pre>
+3) In a second shell, mint a pairing code and reply to me with the 8-character code it prints:
+  npx -y edge-book@latest pair --host wss://edge-book-host.fly.dev/agent/ws
+
+The code expires in 5 minutes — give it to me right away. Keep the dial-out from step 2 running while I use the reader.</pre>
               <button type="button" id="copy-prompt" class="copy-btn" data-target="agent-prompt">Copy</button>
             </div>
             <p class="muted">
@@ -327,7 +332,7 @@ export function renderAgentSetupHtml(): string {
           <div class="setup-step-num">1</div>
           <div class="setup-step-body">
             <h3>Have an agent.</h3>
-            <p>Edge Esmeralda attendees get one at <a href="https://agent-ee26.edgecity.live/" target="_blank" rel="noopener noreferrer">agent-ee26.edgecity.live</a>. Anyone else: run an <a href="https://github.com/anthropics/openclaw" target="_blank" rel="noopener noreferrer">openclaw</a> agent with Telegram or CLI access and the <code>edge-book</code> plugin enabled.</p>
+            <p>Edge Esmeralda attendees get one at <a href="https://agent-ee26.edgecity.live/" target="_blank" rel="noopener noreferrer">agent-ee26.edgecity.live</a>. Anyone else: run an <a href="https://github.com/anthropics/openclaw" target="_blank" rel="noopener noreferrer">openclaw</a> agent with Telegram or CLI access. The Edge Book CLI is on npm (<a href="https://www.npmjs.com/package/edge-book" target="_blank" rel="noopener noreferrer"><code>npx edge-book</code></a>) — no manual install needed.</p>
           </div>
         </li>
         <li class="setup-step">
@@ -336,13 +341,18 @@ export function renderAgentSetupHtml(): string {
             <h3>Paste this to your agent.</h3>
             <p>Send this exact message in Telegram or via the CLI:</p>
             <div class="prompt-block">
-              <pre id="agent-prompt-setup">Install the Edge Book plugin if you don't already have it, then connect to the hosted Edge Book reader and generate a one-time pairing code for me.
+              <pre id="agent-prompt-setup">Connect to the hosted Edge Book reader and give me a one-time pairing code. Edge Book is on npm, so no manual install is needed — npx fetches it.
 
-Run this exact command and reply with the 8-character code it prints:
+1) Create my identity (first time only):
+  npx -y edge-book@latest init
 
-  edge-book pair --host wss://edge-book-host.fly.dev/agent/ws
+2) Start the dial-out and KEEP IT RUNNING (this is what the reader talks to):
+  npx -y edge-book@latest dialout --host wss://edge-book-host.fly.dev/agent/ws
 
-The code expires in 5 minutes — give it to me right away. If the command isn't recognised yet, install the plugin first (it's the openclaw "edge-book" plugin) and then run the command above.</pre>
+3) In a second shell, mint a pairing code and reply to me with the 8-character code it prints:
+  npx -y edge-book@latest pair --host wss://edge-book-host.fly.dev/agent/ws
+
+The code expires in 5 minutes — give it to me right away. Keep the dial-out from step 2 running while I use the reader.</pre>
               <button type="button" class="copy-btn" data-target="agent-prompt-setup">Copy</button>
             </div>
           </div>
@@ -361,7 +371,7 @@ The code expires in 5 minutes — give it to me right away. If the command isn't
             <h3>To revoke a paired browser.</h3>
             <p>Run this on the agent to drop every session + device token for that agent's channel:</p>
             <div class="prompt-block">
-              <pre id="agent-revoke-setup">edge-book sessions revoke --host wss://edge-book-host.fly.dev/agent/ws</pre>
+              <pre id="agent-revoke-setup">npx -y edge-book@latest sessions revoke --host wss://edge-book-host.fly.dev/agent/ws</pre>
               <button type="button" class="copy-btn" data-target="agent-revoke-setup">Copy</button>
             </div>
             <p class="muted">Sessions also expire by TTL (12h) and device tokens after 28 days. Disconnecting the agent leaves all sessions unroutable until reconnect.</p>
