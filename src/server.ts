@@ -427,6 +427,13 @@ function attachAgentSocket(ws: import("ws").WebSocket, remote: string): void {
       channel_id = result.channel_id;
       clearTimeout(helloTimer);
       try { ws.send(JSON.stringify({ type: "hello_ok", channel_id, server_time: new Date().toISOString() })); } catch { /* ignore */ }
+      // Flush any store-and-forward envelopes queued while this channel was
+      // offline (ea-claude-064). Deferred a tick after hello_ok so a client that
+      // wires its frame handler right after the handshake doesn't miss the first
+      // delivery. Delivery is at-least-once regardless — unacked messages stay
+      // queued and redeliver on the next connect.
+      const cid = channel_id;
+      setImmediate(() => { try { channels.flushMailbox(cid); } catch { /* ignore */ } });
       return;
     }
     channels.handleFrame(channel_id, ws, frame);

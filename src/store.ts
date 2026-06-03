@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { MailboxMessage } from "./contracts.js";
 
 export interface PairingCode {
   code: string;
@@ -32,18 +33,28 @@ export interface ChannelMeta {
   last_active_at?: number;
 }
 
+// A queued mailbox envelope (ea-claude-064). The host stores routing metadata +
+// the opaque `blob` only — never envelope plaintext. `expires_at` is a
+// host-internal TTL for purge and is NOT part of the wire MailboxMessage.
+export interface StoredMailboxMessage extends MailboxMessage {
+  expires_at: number;
+}
+
 interface State {
   pairing_codes: Record<string, PairingCode>;
   sessions: Record<string, Session>;
   device_tokens: Record<string, DeviceToken>;
   channels: Record<string, ChannelMeta>;
+  // Store-and-forward queue keyed by host-assigned message id. Survives restart.
+  mailbox: Record<string, StoredMailboxMessage>;
 }
 
 const EMPTY: State = {
   pairing_codes: {},
   sessions: {},
   device_tokens: {},
-  channels: {}
+  channels: {},
+  mailbox: {}
 };
 
 export class HostStore {
@@ -66,7 +77,8 @@ export class HostStore {
         pairing_codes: parsed.pairing_codes || {},
         sessions: parsed.sessions || {},
         device_tokens: parsed.device_tokens || {},
-        channels: parsed.channels || {}
+        channels: parsed.channels || {},
+        mailbox: parsed.mailbox || {}
       };
     } catch {
       return structuredClone(EMPTY);
@@ -97,7 +109,53 @@ export class HostStore {
     for (const [k, v] of Object.entries(this.state.device_tokens)) {
       if (v.expires_at <= now) delete this.state.device_tokens[k];
     }
+    for (const [k, v] of Object.entries(this.state.mailbox)) {
+      if (v.expires_at <= now) delete this.state.mailbox[k];
+    }
     this.scheduleFlush();
+  }
+
+  // --- mailbox (store-and-forward; ea-claude-064) ---
+
+  // Persist an opaque envelope for later delivery. Returns the stored message.
+  enqueueMailbox(msg: MailboxMessage, ttl_ms: number): StoredMailboxMessage {
+    const stored: StoredMailboxMessage = { ...msg, expires_at: Date.now() + ttl_ms };
+    this.state.mailbox[msg.id] = stored;
+    this.scheduleFlush();
+    return stored;
+  }
+
+  // Unacked messages addressed to a recipient, oldest-first. `to` may have been
+  // recorded as either the channel_id or a DID alias, so match against both.
+  mailboxForRecipient(channel_id: string, agent_did: string | null, now: number = Date.now()): MailboxMessage[] {
+    const out: StoredMailboxMessage[] = [];
+    for (const m of Object.values(this.state.mailbox)) {
+      if (m.expires_at <= now) continue;
+      if (m.to === channel_id || (agent_did && m.to === agent_did)) out.push(m);
+    }
+    out.sort((a, b) => a.ts - b.ts);
+    // Strip the host-internal expires_at — the wire shape is {id,to,from,blob,ts}.
+    return out.map(({ expires_at: _omit, ...wire }) => wire);
+  }
+
+  // Peek a queued message's recipient (`to`) without deleting it.
+  peekMailboxRecipient(id: string): string | null {
+    return this.state.mailbox[id]?.to ?? null;
+  }
+
+  // Delete a delivered+acked message. Returns the channel it was addressed to,
+  // or null if unknown (idempotent — a duplicate ack is a no-op).
+  ackMailbox(id: string): string | null {
+    const m = this.state.mailbox[id];
+    if (!m) return null;
+    delete this.state.mailbox[id];
+    this.scheduleFlush();
+    return m.to;
+  }
+
+  // For tests / inspection.
+  mailboxCount(): number {
+    return Object.keys(this.state.mailbox).length;
   }
 
   // --- pairing codes ---

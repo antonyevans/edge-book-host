@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import { channelIdFromKey, timingSafeEqual } from "./tokens.js";
+import { channelIdFromKey, randomToken, timingSafeEqual } from "./tokens.js";
 import type { HostStore } from "./store.js";
 
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -7,6 +7,10 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const PING_INTERVAL_MS = 25_000;
 const MAX_MISSED_PONGS = 2;
 const MAX_CONNECTIONS_PER_CHANNEL = 4;
+// Mailbox (ea-claude-064): opaque envelope cap matches the API response cap;
+// queued envelopes live this long before purge (matches the 7d idle window).
+const MAX_BLOB_BYTES = 8 * 1024 * 1024;
+const MAILBOX_TTL_MS = Number(process.env.EDGE_BOOK_MAILBOX_TTL_MS) || 7 * 24 * 60 * 60 * 1000;
 
 // Short, non-sensitive channel handle for logs (sha256 prefix; never the key).
 function cref(channel_id: string): string {
@@ -234,6 +238,47 @@ export class ChannelRegistry {
       this.send(ws, { type: "sessions_revoke_ok", request_id, revoked: count, channel_id: channel.channel_id });
       return;
     }
+    // Mailbox send (ea-claude-064): A enqueues an opaque envelope for `to`. The
+    // host stamps `from` from THIS authenticated channel — never trusts a
+    // sender-supplied `from`. Blob is opaque; the host never parses it.
+    if (type === "mailbox_send") {
+      const request_id = String(frame.request_id || "");
+      const to = String(frame.to || "");
+      const blob_b64 = String(frame.blob_b64 || "");
+      if (!to || !blob_b64) {
+        this.send(ws, { type: "mailbox_send_err", request_id, error: "invalid_mailbox_send" });
+        return;
+      }
+      if (Buffer.byteLength(blob_b64, "base64") > MAX_BLOB_BYTES) {
+        this.send(ws, { type: "mailbox_send_err", request_id, error: "blob_too_large" });
+        return;
+      }
+      const id = randomToken(12);
+      const msg = { id, to, from: channel.channel_id, blob: blob_b64, ts: Date.now() };
+      this.store.enqueueMailbox(msg, MAILBOX_TTL_MS);
+      logEvent("mailbox_enqueue", { id, to: cref(to), from: cref(channel.channel_id) });
+      this.send(ws, { type: "mailbox_send_ok", request_id, id });
+      // Best-effort immediate delivery if the recipient is online. At-least-once
+      // either way: the message stays queued until the recipient acks.
+      this.deliverQueued(to);
+      return;
+    }
+    // Mailbox ack (ea-claude-064): the recipient confirms it applied an envelope
+    // so the host can delete it. Only the addressed recipient may ack.
+    if (type === "mailbox_ack") {
+      const id = String(frame.id || "");
+      if (!id) return;
+      // Only the addressed recipient may delete a message. Match against the
+      // channel_id and any DID alias the sender used to address it.
+      const recipient = this.store.peekMailboxRecipient(id);
+      if (recipient && recipient !== channel.channel_id && recipient !== channel.agent_did) {
+        logEvent("mailbox_ack_reject", { id, by: cref(channel.channel_id) });
+        return;
+      }
+      const deleted = this.store.ackMailbox(id);
+      if (deleted) logEvent("mailbox_ack", { id, to: cref(deleted) });
+      return;
+    }
     // Unknown — echo back on the originating socket.
     this.send(ws, { type: "error", error: "unknown_message_type", ref: typeof type === "string" ? type : null });
   }
@@ -260,6 +305,38 @@ export class ChannelRegistry {
       stoodDown.push(channel_id);
     }
     return stoodDown;
+  }
+
+  // Deliver every unacked queued envelope addressed to `recipient` (a channel_id
+  // or DID alias) to its primary open connection, if any. No-op when offline —
+  // messages stay queued and are redelivered on the recipient's next connect.
+  // At-least-once: a message is deleted only when the recipient acks it.
+  deliverQueued(recipient: string): number {
+    // Resolve the recipient to a live channel: try direct channel_id, else find
+    // a connected channel whose DID alias matches.
+    let channel = this.channels.get(recipient);
+    if (!channel) {
+      for (const c of this.channels.values()) {
+        if (c.agent_did === recipient) { channel = c; break; }
+      }
+    }
+    if (!channel) return 0;
+    const primary = this.primaryConn(channel.channel_id);
+    if (!primary) return 0;
+    const queued = this.store.mailboxForRecipient(channel.channel_id, channel.agent_did);
+    let sent = 0;
+    for (const m of queued) {
+      this.send(primary.ws, { type: "mailbox_deliver", id: m.id, from: m.from, blob_b64: m.blob, ts: m.ts });
+      sent++;
+    }
+    if (sent) logEvent("mailbox_deliver", { channel: cref(channel.channel_id), count: sent });
+    return sent;
+  }
+
+  // Called by the server right after `hello_ok`: flush any envelopes that
+  // arrived while this channel was offline.
+  flushMailbox(channel_id: string): number {
+    return this.deliverQueued(channel_id);
   }
 
   // Most-recently-attached OPEN connection on a channel, if any.
