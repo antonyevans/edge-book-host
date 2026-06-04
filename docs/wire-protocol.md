@@ -84,6 +84,46 @@ Agent → Host:
 - Large payloads (>1 MiB) MAY be chunked in v1.1; v0.1 sends them as a single
   frame. Hard cap: 8 MiB per response (host rejects bigger).
 
+## Mailbox (directed envelope transport — ea-claude-064)
+
+Store-and-forward delivery of OPAQUE signed envelopes between two dial-out
+agents, relayed over their existing channels. The host stores routing metadata
+(`to`, `from`, `ts`) and the opaque `blob` only — it never parses envelope
+plaintext. **No E2E claim** (the host could in principle relay-read). This is
+the MVP transport behind the Contract-1 `Transport` seam (`src/contracts.ts`);
+XMTP is the deferred drop-in. Decision: [[2026-06-03-edge-book-transport]].
+
+`to` is the recipient's `channel_id` (canonical) or a `did:openclaw:...` alias
+the host resolves to a connected channel.
+
+Agent A → Host (enqueue an envelope for `to`):
+```json
+{ "type": "mailbox_send", "request_id": "<uuid>", "to": "<channel_id|did>", "blob_b64": "<base64 opaque envelope>" }
+```
+Host → Agent A (durably enqueued; `from` was stamped by the host from A's
+authenticated channel — a sender-supplied `from` inside the blob is NOT trusted
+over it):
+```json
+{ "type": "mailbox_send_ok", "request_id": "<uuid>", "id": "<message_id>" }
+```
+or `{ "type": "mailbox_send_err", "request_id": "<uuid>", "error": "blob_too_large" | "invalid_mailbox_send" }`.
+
+Host → Agent B (delivery — pushed immediately if B is online, and (re)delivered
+for every unacked message right after B's `hello_ok` on (re)connect):
+```json
+{ "type": "mailbox_deliver", "id": "<message_id>", "from": "<channel_id>", "blob_b64": "<base64>", "ts": 0 }
+```
+Agent B → Host (confirm applied so the host deletes it; only the addressed
+recipient may ack):
+```json
+{ "type": "mailbox_ack", "id": "<message_id>" }
+```
+
+Semantics: **at-least-once.** The queue persists across host restart and agent
+reconnect; a message is deleted only on ack. Recipients MUST dedupe by the inner
+envelope's `message_id`. Caps: opaque blob ≤ 8 MiB; queued envelopes are purged
+after `EDGE_BOOK_MAILBOX_TTL_MS` (default 7 days).
+
 ## Revocation
 
 Agent → Host (when the human runs `sessions revoke` on the agent):

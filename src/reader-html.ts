@@ -52,7 +52,9 @@ export function renderReaderHtml(ctx: ReaderContext): string {
       </div>
       <button data-view="profile">Profile <span id="profileCount">Owner</span></button>
       <button data-view="feed" class="active">Feed <span id="feedCount">Visible 0</span></button>
+      <button data-view="shared">Shared with me <span id="sharedCount">Shared 0</span></button>
       <button data-view="contacts">Friends <span id="contactCount">Friends 0</span></button>
+      <button data-view="add">Add me <span>Invite</span></button>
       <button data-view="messages">Messages <span id="messageCount">Total 0</span></button>
       <button data-view="posts">Post history <span id="postCount">Drafts 0</span></button>
       <button data-view="approvals">Approvals <span id="approvalCount">Pending 0</span></button>
@@ -491,17 +493,21 @@ const READER_SCRIPT = `<script>
     feedItems: {},
     approvals: {},
     messages: [],
-    audit: []
+    audit: [],
+    shared: [],
+    invite: null
   };
   const titleByView = {
-    profile: "Profile", feed: "Feed", contacts: "Friends and contacts",
-    messages: "Messages", posts: "Post history", approvals: "Approvals",
+    profile: "Profile", feed: "Feed", shared: "Shared with me", contacts: "Friends and contacts",
+    add: "Add me", messages: "Messages", posts: "Post history", approvals: "Approvals",
     activity: "Activity Log", inspector: "Inspector"
   };
   const copyByView = {
     profile: "Owner identity, hosted session, relationship posture, and working history.",
     feed: "Relationship-gated updates with delivery and provenance context.",
+    shared: "Objects a contact shared with you. Each appears only because an active, scoped grant permits you to read it.",
     contacts: "Relationship state, grants, endpoints, and local moderation posture.",
+    add: "Share your Agent Card as an invite link to add a trusted contact. Importing it sends a friend request over the host mailbox.",
     messages: "Friend-gated envelopes grouped by peer context.",
     posts: "Drafts, approvals, visibility, source basis, and removal state.",
     approvals: "Human gates for agent-authored changes and risk-bearing actions.",
@@ -566,6 +572,30 @@ const READER_SCRIPT = `<script>
   }
   function shortId(value) { const text = String(value || ""); return text.length > 18 ? text.slice(0, 18) + "..." : text; }
   function labelize(value) { return String(value || "n/a").replace(/_/g, " "); }
+  function formatBytes(n) {
+    n = Number(n) || 0;
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / (1024 * 1024)).toFixed(1) + " MB";
+  }
+  function renderAddMe() {
+    const invite = state.invite;
+    const link = invite && (invite.invite_url || invite.card_url);
+    const head = '<section class="profile-panel"><div class="profile-head"><div class="avatar">EB</div><div><div class="profile-name">' + escapeHtml(publicOwnerLabel()) + '</div><div class="profile-meta">Your Agent Card</div></div></div>';
+    if (!link) {
+      return head + renderEmpty("Your agent did not return an invite link. Update the edge-book plugin to expose GET /api/invite (it returns your signed Agent Card as a shareable link).") + '</section>';
+    }
+    const linkRow = '<div class="invite-link"><label class="trust-label" for="inviteUrl">Invite link</label>' +
+      '<div class="invite-link-row"><input id="inviteUrl" class="invite-url" readonly value="' + escapeHtml(link) + '">' +
+      '<button type="button" class="primary" data-action="copy-invite" data-id="' + escapeHtml(link) + '">Copy</button></div></div>';
+    const steps = '<ol class="invite-steps">' +
+      '<li>Send this link to the person you want to add (it encodes your signed Agent Card).</li>' +
+      '<li>They open it and import the card &mdash; this creates a trusted contact.</li>' +
+      '<li>A friend request is delivered to you over the host mailbox; approve it to connect.</li>' +
+      '</ol>';
+    const privacy = '<div class="view-copy">Honest privacy posture: envelopes are relayed through the host, which can in principle read them in transit &mdash; there is no end-to-end encryption claim for this MVP. A scannable QR of this link is coming next.</div>';
+    return head + linkRow + steps + privacy + '</section>';
+  }
   function publicOwnerLabel() { return (state.me && state.me.display_name) || "Local owner"; }
   function initials(label) {
     const words = String(label || "EB").replace(/[^a-z0-9 ]/gi, " ").trim().split(/\\s+/).filter(Boolean);
@@ -638,6 +668,7 @@ const READER_SCRIPT = `<script>
     setText("viewCopy", copyByView[state.view]);
     setText("viewState", "Current");
     setText("feedCount", "Visible " + visibleFeedItems().length);
+    setText("sharedCount", "Shared " + (state.shared || []).length);
     setText("contactCount", "Friends " + friendContacts().length);
     setText("postCount", "Drafts " + draftPosts().length);
     setText("approvalCount", "Pending " + pendingApprovals().length);
@@ -693,6 +724,31 @@ const READER_SCRIPT = `<script>
           ["delivery", labelize(feed.delivery_route || "local")]
         ], "Posted " + timeLabel(post.published_at || post.updated_at || feed.received_at));
       }).join("") || renderFeedEmpty();
+    }
+    if (state.view === "shared") {
+      // Each entry is a Contract-2 SharedObject the owner has been GRANTED to
+      // read. The agent (066) returns only grant-permitted objects (fail-closed,
+      // canRead), so a non-granted contact's object simply never appears here.
+      html = (state.shared || []).map(function (obj) {
+        const req = obj.request || {};
+        const att = obj.attachment;
+        const facts = [
+          "from: " + agentLabel(obj.from_agent),
+          att ? ("file: " + att.filename + " (" + labelize(att.mime) + ", " + formatBytes(att.size) + ")") : "no attachment",
+          "shared: " + timeLabel(obj.created_at)
+        ];
+        const trust = [
+          ["type", labelize(obj.type || "request")],
+          ["from", agentLabel(obj.from_agent)],
+          ["grant", labelize(obj.grant_scope || "object.read")],
+          ["signature", obj.signature ? "present" : "missing"]
+        ];
+        const attActions = att ? action("Open attachment", "shared-open-attachment", obj.object_id) : "";
+        return item(req.title || "Untitled request", req.body || "", facts, obj, "", attActions, trust, "Shared " + timeLabel(obj.created_at));
+      }).join("") || renderEmpty("Nothing has been shared with you yet. A shared object appears here only when a contact grants you access to it.");
+    }
+    if (state.view === "add") {
+      html = renderAddMe();
     }
     if (state.view === "contacts") {
       html = values(state.contacts).map(function (contact) {
@@ -790,6 +846,16 @@ const READER_SCRIPT = `<script>
   function postJson(path, body) { return api(path, { method: "POST", body: JSON.stringify(body || {}) }); }
   async function runAction(name, id) {
     try {
+      if (name === "copy-invite") {
+        try { await navigator.clipboard.writeText(id); setText("sessionBadge", "Invite link copied"); }
+        catch (e) { setInspector({ action: "copy-invite", note: "Clipboard unavailable — select and copy the link manually.", value: id }); }
+        return;
+      }
+      if (name === "shared-open-attachment") {
+        // The attachment is agent-held; the host proxies the fetch. ≤1 file (R2b).
+        window.open("/api/shared-objects/" + encodeURIComponent(id) + "/attachment", "_blank", "noopener");
+        return;
+      }
       if (name === "feed-read") await postJson("/api/feed/" + encodeURIComponent(id) + "/read");
       if (name === "feed-hide") await postJson("/api/feed/" + encodeURIComponent(id) + "/hide", { reason: prompt("Reason", "hidden by owner") || "" });
       if (name === "contact-mute") await postJson("/api/contacts/" + encodeURIComponent(id) + "/mute", { reason: prompt("Reason", "muted by owner") || "" });
@@ -839,10 +905,16 @@ const READER_SCRIPT = `<script>
         api("/api/posts"),
         api("/api/feed"),
         api("/api/approvals"),
-        api("/api/audit")
+        api("/api/audit"),
+        // Contract-2 surfaces (ea-claude-066/067). Tolerant of older agents that
+        // don't expose them yet — the views just stay empty.
+        api("/api/shared-objects").catch(function () { return { objects: [] }; }),
+        api("/api/invite").catch(function () { return null; })
       ]);
       const contacts = sets[0], posts = sets[1], feed = sets[2], approvals = sets[3], audit = sets[4];
       state.contacts = contacts.contacts;
+      state.shared = (sets[5] && sets[5].objects) || [];
+      state.invite = sets[6];
       state.mutes = contacts.mutes;
       state.posts = posts.posts;
       state.feedItems = feed.feed_items;
@@ -855,22 +927,49 @@ const READER_SCRIPT = `<script>
       setText("sessionBadge", "Hosted session active");
       render();
     } catch (error) {
-      if (error.message === "agent_offline") {
-        document.getElementById("content").innerHTML = '<div class="loading">Your agent is offline. The host holds nothing of your social graph at rest.</div>';
-        setText("viewState", "Agent offline");
-        setText("sessionBadge", "Agent offline");
-        return;
-      }
+      // Let the boot loop decide whether to retry (the agent may just be
+      // mid-connect — a freshly-paired session races the dial-out attach).
       throw error;
     }
   }
   document.querySelectorAll("nav button").forEach(function (button) {
     button.addEventListener("click", function () { state.view = button.dataset.view; render(); });
   });
-  document.getElementById("content").innerHTML = skeleton();
-  refresh().catch(function (err) {
-    document.getElementById("content").innerHTML = '<div class="error">Failed to load: ' + escapeHtml(err.message || String(err)) + '</div>';
-  });
+  // Boot with retry: a just-paired reader can hit a transient 502/500 while the
+  // agent's dial-out is still attaching. Retry with backoff before settling so
+  // the demo doesn't show empty counts until a manual reload.
+  var polling = false;
+  function startPolling() {
+    if (polling) return;
+    polling = true;
+    // Gentle live refresh so a newly shared/revoked object appears without a
+    // manual reload. Errors are swallowed — the next tick retries. Also keeps
+    // the dial-out channel marked active (resets the host idle timer).
+    setInterval(function () { refresh().catch(function () { /* transient; retry next tick */ }); }, 15000);
+  }
+  (async function boot() {
+    document.getElementById("content").innerHTML = skeleton();
+    for (var attempt = 1; ; attempt++) {
+      try { await refresh(); startPolling(); return; }
+      catch (err) {
+        var offline = err && err.message === "agent_offline";
+        if (attempt < 6) {
+          setText("sessionBadge", offline ? "Connecting to your agent..." : "Loading...");
+          document.getElementById("content").innerHTML = skeleton(offline ? "Connecting to your agent..." : "Loading Edge Book data...");
+          await new Promise(function (r) { setTimeout(r, 1000); });
+          continue;
+        }
+        if (offline) {
+          document.getElementById("content").innerHTML = '<div class="loading">Your agent is offline. The host holds nothing of your social graph at rest.</div>';
+          setText("viewState", "Agent offline");
+          setText("sessionBadge", "Agent offline");
+        } else {
+          document.getElementById("content").innerHTML = '<div class="error">Failed to load: ' + escapeHtml(err.message || String(err)) + '</div>';
+        }
+        return;
+      }
+    }
+  })();
 })();
 </script>`;
 
@@ -1669,6 +1768,10 @@ pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 11px;
 .profile-head .avatar { width: 52px; height: 52px; font-size: 16px; }
 .profile-name { font-size: 16px; font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
 .profile-meta { color: var(--muted); overflow-wrap: anywhere; }
+.invite-link { display: grid; gap: 4px; }
+.invite-link-row { display: flex; gap: 6px; align-items: stretch; }
+.invite-url { flex: 1 1 auto; min-width: 0; font-family: var(--mono, monospace); font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); background: var(--bg, #0d1117); color: var(--ink); }
+.invite-steps { margin: 4px 0 0; padding-left: 18px; color: var(--ink); font-size: 12px; display: grid; gap: 4px; }
 .activity-list { display: grid; gap: 6px; }
 .activity-row { border-bottom: 1px solid #e4ebef; padding-bottom: 6px; display: grid; gap: 2px; cursor: pointer; }
 .activity-row:last-child { border-bottom: 0; padding-bottom: 0; }
