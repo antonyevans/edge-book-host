@@ -927,22 +927,49 @@ const READER_SCRIPT = `<script>
       setText("sessionBadge", "Hosted session active");
       render();
     } catch (error) {
-      if (error.message === "agent_offline") {
-        document.getElementById("content").innerHTML = '<div class="loading">Your agent is offline. The host holds nothing of your social graph at rest.</div>';
-        setText("viewState", "Agent offline");
-        setText("sessionBadge", "Agent offline");
-        return;
-      }
+      // Let the boot loop decide whether to retry (the agent may just be
+      // mid-connect — a freshly-paired session races the dial-out attach).
       throw error;
     }
   }
   document.querySelectorAll("nav button").forEach(function (button) {
     button.addEventListener("click", function () { state.view = button.dataset.view; render(); });
   });
-  document.getElementById("content").innerHTML = skeleton();
-  refresh().catch(function (err) {
-    document.getElementById("content").innerHTML = '<div class="error">Failed to load: ' + escapeHtml(err.message || String(err)) + '</div>';
-  });
+  // Boot with retry: a just-paired reader can hit a transient 502/500 while the
+  // agent's dial-out is still attaching. Retry with backoff before settling so
+  // the demo doesn't show empty counts until a manual reload.
+  var polling = false;
+  function startPolling() {
+    if (polling) return;
+    polling = true;
+    // Gentle live refresh so a newly shared/revoked object appears without a
+    // manual reload. Errors are swallowed — the next tick retries. Also keeps
+    // the dial-out channel marked active (resets the host idle timer).
+    setInterval(function () { refresh().catch(function () { /* transient; retry next tick */ }); }, 15000);
+  }
+  (async function boot() {
+    document.getElementById("content").innerHTML = skeleton();
+    for (var attempt = 1; ; attempt++) {
+      try { await refresh(); startPolling(); return; }
+      catch (err) {
+        var offline = err && err.message === "agent_offline";
+        if (attempt < 6) {
+          setText("sessionBadge", offline ? "Connecting to your agent..." : "Loading...");
+          document.getElementById("content").innerHTML = skeleton(offline ? "Connecting to your agent..." : "Loading Edge Book data...");
+          await new Promise(function (r) { setTimeout(r, 1000); });
+          continue;
+        }
+        if (offline) {
+          document.getElementById("content").innerHTML = '<div class="loading">Your agent is offline. The host holds nothing of your social graph at rest.</div>';
+          setText("viewState", "Agent offline");
+          setText("sessionBadge", "Agent offline");
+        } else {
+          document.getElementById("content").innerHTML = '<div class="error">Failed to load: ' + escapeHtml(err.message || String(err)) + '</div>';
+        }
+        return;
+      }
+    }
+  })();
 })();
 </script>`;
 
