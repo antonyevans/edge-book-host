@@ -10,6 +10,8 @@
 // Output of agent-supplied data is escapeHtml'd in-place (carried over from
 // the source). The host sets a strict CSP header to bound XSS blast radius.
 
+import { QRCODE_GENERATOR_JS } from "./qrcode-lib.js";
+
 export interface ReaderContext {
   csrf_token: string;
   agent_online: boolean;
@@ -117,6 +119,7 @@ export function renderReaderHtml(ctx: ReaderContext): string {
     </aside>
     </div>
   </div>
+  <script>${QRCODE_GENERATOR_JS}</script>
   ${READER_SCRIPT}
 </body>
 </html>`;
@@ -588,13 +591,15 @@ const READER_SCRIPT = `<script>
     const linkRow = '<div class="invite-link"><label class="trust-label" for="inviteUrl">Invite link</label>' +
       '<div class="invite-link-row"><input id="inviteUrl" class="invite-url" readonly value="' + escapeHtml(link) + '">' +
       '<button type="button" class="primary" data-action="copy-invite" data-id="' + escapeHtml(link) + '">Copy</button></div></div>';
+    // QR of the invite link — populated client-side in render() (window.qrcode).
+    const qrBlock = '<div class="invite-qr"><div id="inviteQr" class="invite-qr-code" role="img" aria-label="QR code of your invite link"></div><div class="invite-qr-caption">Scan to capture the invite link.</div></div>';
     const steps = '<ol class="invite-steps">' +
       '<li>Send this link to the person you want to add (it encodes your signed Agent Card).</li>' +
       '<li>They open it and import the card &mdash; this creates a trusted contact.</li>' +
       '<li>A friend request is delivered to you over the host mailbox; approve it to connect.</li>' +
       '</ol>';
-    const privacy = '<div class="view-copy">Honest privacy posture: envelopes are relayed through the host, which can in principle read them in transit &mdash; there is no end-to-end encryption claim for this MVP. A scannable QR of this link is coming next.</div>';
-    return head + linkRow + steps + privacy + '</section>';
+    const privacy = '<div class="view-copy">Honest privacy posture: envelopes are relayed through the host, which can in principle read them in transit &mdash; there is no end-to-end encryption claim for this MVP.</div>';
+    return head + linkRow + qrBlock + steps + privacy + '</section>';
   }
   function publicOwnerLabel() { return (state.me && state.me.display_name) || "Local owner"; }
   function initials(label) {
@@ -842,6 +847,21 @@ const READER_SCRIPT = `<script>
     });
     const composer = content.querySelector("form[data-action='post-create']");
     if (composer) composer.addEventListener("submit", createPost);
+    // Render the invite QR (client-side, via the vendored qrcode generator).
+    if (state.view === "add") {
+      const qrEl = document.getElementById("inviteQr");
+      const link = state.invite && (state.invite.invite_url || state.invite.card_url);
+      if (qrEl && link && typeof window.qrcode === "function") {
+        try {
+          const qr = window.qrcode(0, "L"); // type 0 = auto-fit, ECC level L (max capacity)
+          qr.addData(link);
+          qr.make();
+          qrEl.innerHTML = qr.createSvgTag({ cellSize: 3, margin: 2, scalable: true });
+        } catch (err) {
+          qrEl.textContent = "Invite link is too long to encode as a QR; use the Copy button.";
+        }
+      }
+    }
   }
   function postJson(path, body) { return api(path, { method: "POST", body: JSON.stringify(body || {}) }); }
   async function runAction(name, id) {
@@ -1772,6 +1792,10 @@ pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 11px;
 .invite-link-row { display: flex; gap: 6px; align-items: stretch; }
 .invite-url { flex: 1 1 auto; min-width: 0; font-family: var(--mono, monospace); font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); background: var(--bg, #0d1117); color: var(--ink); }
 .invite-steps { margin: 4px 0 0; padding-left: 18px; color: var(--ink); font-size: 12px; display: grid; gap: 4px; }
+.invite-qr { display: grid; gap: 4px; justify-items: center; padding: 8px 0; }
+.invite-qr-code { background: #fff; padding: 8px; border: 1px solid var(--line); width: 184px; height: 184px; box-sizing: content-box; }
+.invite-qr-code svg { display: block; width: 184px; height: 184px; }
+.invite-qr-caption { color: var(--muted); font-size: 11px; }
 .activity-list { display: grid; gap: 6px; }
 .activity-row { border-bottom: 1px solid #e4ebef; padding-bottom: 6px; display: grid; gap: 2px; cursor: pointer; }
 .activity-row:last-child { border-bottom: 0; padding-bottom: 0; }
