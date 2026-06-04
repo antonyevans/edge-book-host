@@ -962,10 +962,15 @@ const READER_SCRIPT = `<script>
   function startPolling() {
     if (polling) return;
     polling = true;
+    // Quick catch-up refreshes: the optional surfaces (/api/invite,
+    // /api/shared-objects) are fetched best-effort, so a single transient hiccup
+    // during the connect race can leave them empty on first paint. Re-fetch
+    // soon after the first success so the invite/QR/objects fill in fast.
+    setTimeout(function () { refresh().catch(function () {}); }, 2500);
+    setTimeout(function () { refresh().catch(function () {}); }, 6000);
     // Gentle live refresh so a newly shared/revoked object appears without a
-    // manual reload. Errors are swallowed — the next tick retries. Also keeps
-    // the dial-out channel marked active (resets the host idle timer).
-    setInterval(function () { refresh().catch(function () { /* transient; retry next tick */ }); }, 15000);
+    // manual reload. Also keeps the dial-out channel marked active (idle timer).
+    setInterval(function () { refresh().catch(function () {}); }, 15000);
   }
   (async function boot() {
     document.getElementById("content").innerHTML = skeleton();
