@@ -16,9 +16,23 @@ export interface Session {
 }
 
 export interface DeviceToken {
-  device_token: string;
+  device_token: string; // secret — never surfaced to the agent/UI
   channel_id: string;
   expires_at: number;
+  // Per-device metadata (ea-claude-057). device_id is a non-secret stable handle
+  // the owner uses to list + selectively revoke a device.
+  device_id?: string;
+  label?: string;
+  created_at?: number;
+  last_seen_at?: number;
+}
+
+// What an agent/owner sees when listing their devices — no secret token.
+export interface DeviceInfo {
+  device_id: string;
+  label: string;
+  created_at: number;
+  last_seen_at: number;
 }
 
 export interface ChannelMeta {
@@ -236,6 +250,48 @@ export class HostStore {
       return null;
     }
     return t;
+  }
+
+  // Update last-seen on device-token auto-resume (ea-claude-057).
+  touchDevice(device_token: string, now: number = Date.now()): void {
+    const t = this.state.device_tokens[device_token];
+    if (!t) return;
+    t.last_seen_at = now;
+    this.scheduleFlush();
+  }
+
+  // Non-secret list of a channel's active devices, newest first (ea-claude-057).
+  listDevices(channel_id: string, now: number = Date.now()): DeviceInfo[] {
+    const out: DeviceInfo[] = [];
+    for (const t of Object.values(this.state.device_tokens)) {
+      if (t.channel_id !== channel_id || t.expires_at <= now || !t.device_id) continue;
+      out.push({
+        device_id: t.device_id,
+        label: t.label || "device",
+        created_at: t.created_at || 0,
+        last_seen_at: t.last_seen_at || t.created_at || 0
+      });
+    }
+    out.sort((a, b) => b.created_at - a.created_at);
+    return out;
+  }
+
+  // Revoke ONE device by its public device_id, scoped to the channel (an agent
+  // can only revoke its own devices). Drops the device token AND any sessions it
+  // would auto-resume. Returns true if a device was revoked (ea-claude-057).
+  revokeDeviceById(channel_id: string, device_id: string): boolean {
+    let revoked = false;
+    for (const [k, t] of Object.entries(this.state.device_tokens)) {
+      if (t.channel_id === channel_id && t.device_id === device_id) {
+        delete this.state.device_tokens[k];
+        revoked = true;
+      }
+    }
+    // Note: existing live sessions on other tabs of that device keep their 12h
+    // session cookie until expiry; the device can no longer auto-resume. For a
+    // hard cut, the owner uses revoke-all. (Documented in wire-protocol.md.)
+    if (revoked) this.scheduleFlush();
+    return revoked;
   }
 
   // --- channels ---

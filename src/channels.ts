@@ -238,6 +238,20 @@ export class ChannelRegistry {
       this.send(ws, { type: "sessions_revoke_ok", request_id, revoked: count, channel_id: channel.channel_id });
       return;
     }
+    // List this channel's remembered devices (ea-claude-057). No secret tokens.
+    if (type === "sessions_list") {
+      const request_id = String(frame.request_id || "");
+      this.send(ws, { type: "sessions_list_ok", request_id, devices: this.store.listDevices(channel.channel_id) });
+      return;
+    }
+    // Revoke ONE device by its public device_id, scoped to this channel.
+    if (type === "session_revoke_one") {
+      const request_id = String(frame.request_id || "");
+      const device_id = String(frame.device_id || "");
+      const revoked = device_id ? this.store.revokeDeviceById(channel.channel_id, device_id) : false;
+      this.send(ws, { type: "session_revoke_one_ok", request_id, device_id, revoked });
+      return;
+    }
     // Mailbox send (ea-claude-064): A enqueues an opaque envelope for `to`. The
     // host stamps `from` from THIS authenticated channel — never trusts a
     // sender-supplied `from`. Blob is opaque; the host never parses it.

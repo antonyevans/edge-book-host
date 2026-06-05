@@ -70,6 +70,17 @@ function readCookies(req: http.IncomingMessage): Record<string, string> {
   return cookie.parse(raw) as Record<string, string>;
 }
 
+// Coarse, non-identifying device label from the User-Agent for the device list
+// (ea-claude-057). Best-effort: "Chrome on macOS", "Safari on iPhone", etc.
+function deviceLabel(ua: string | undefined): string {
+  if (!ua) return "device";
+  const browser = /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Firefox\//.test(ua) ? "Firefox"
+    : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "browser";
+  const osName = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android"
+    : /Macintosh|Mac OS X/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "device";
+  return `${browser} on ${osName}`;
+}
+
 function clientIp(req: http.IncomingMessage): string {
   const fwd = req.headers["fly-client-ip"] || req.headers["x-forwarded-for"];
   if (typeof fwd === "string" && fwd.length) return fwd.split(",")[0]!.trim();
@@ -186,6 +197,7 @@ function resolveSession(req: http.IncomingMessage, res: http.ServerResponse): Au
   if (device) {
     const token = store.getDeviceToken(device);
     if (token) {
+      store.touchDevice(device); // last-seen for the device list (ea-claude-057)
       const session_id = randomToken();
       const csrf_token = randomToken();
       const expires_at = Date.now() + SESSION_TTL_MS;
@@ -268,7 +280,16 @@ async function handlePair(req: http.IncomingMessage, res: http.ServerResponse, u
   setCookie(res, SESSION_COOKIE, session_id, SESSION_TTL_MS);
   if (form.remember === "1") {
     const device_token = randomToken();
-    store.createDeviceToken({ device_token, channel_id, expires_at: Date.now() + DEVICE_TTL_MS });
+    const now = Date.now();
+    store.createDeviceToken({
+      device_token,
+      channel_id,
+      expires_at: now + DEVICE_TTL_MS,
+      device_id: randomToken(8),                 // non-secret public handle (ea-claude-057)
+      label: deviceLabel(req.headers["user-agent"]),
+      created_at: now,
+      last_seen_at: now
+    });
     setCookie(res, DEVICE_COOKIE, device_token, DEVICE_TTL_MS);
   }
   // Clear the pair CSRF cookie.

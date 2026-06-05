@@ -133,6 +133,35 @@ Agent → Host (when the human runs `sessions revoke` on the agent):
 Host responds `sessions_revoke_ok` and drops all sessions + device tokens bound
 to this channel. The next browser request on a stale token returns 401.
 
+## Per-device sessions (ea-claude-057)
+
+List the channel's remembered devices (the "remember this device for 28 days"
+tokens minted at pair time). The host returns NON-secret metadata only — never
+the device token itself.
+
+Agent → Host:
+```json
+{ "type": "sessions_list", "request_id": "<uuid>" }
+```
+Host → Agent:
+```json
+{ "type": "sessions_list_ok", "request_id": "<uuid>",
+  "devices": [ { "device_id": "<short id>", "label": "Chrome on macOS", "created_at": 0, "last_seen_at": 0 } ] }
+```
+
+Revoke ONE device by its public `device_id` (channel-scoped — an agent can only
+revoke its own devices):
+```json
+{ "type": "session_revoke_one", "request_id": "<uuid>", "device_id": "<short id>" }
+```
+Host → Agent:
+```json
+{ "type": "session_revoke_one_ok", "request_id": "<uuid>", "device_id": "<short id>", "revoked": true }
+```
+Revoking a device drops its device token so it can no longer auto-resume; an
+already-live session cookie on that device keeps working until its 12h expiry
+(use `sessions_revoke` for a hard cut of everything).
+
 ## Errors
 
 If the host receives an unknown `type`, it replies:
