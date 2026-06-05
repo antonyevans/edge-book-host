@@ -204,17 +204,24 @@ function requireCsrf(req: http.IncomingMessage, session: AuthedSession, formValu
   return candidate === session.csrf_token;
 }
 
+// Guarantee a valid pair CSRF token that matches the ebh_pair_csrf cookie, so
+// the rendered form's double-submit token is always usable. Reuse the existing
+// cookie if present, else mint one and set the cookie. Every /pair render (GET
+// and all error re-renders) MUST use this — rendering an empty/unbacked token
+// leaves the form unsubmittable until a manual reload (ea-claude-054).
+function ensurePairCsrf(req: http.IncomingMessage, res: http.ServerResponse): string {
+  const cookies = readCookies(req);
+  let csrf = cookies["ebh_pair_csrf"];
+  if (!csrf) {
+    csrf = randomToken(16);
+    appendSetCookie(res, `ebh_pair_csrf=${csrf}; HttpOnly; Path=/; SameSite=Lax; Max-Age=600${COOKIE_SECURE ? "; Secure" : ""}`);
+  }
+  return csrf;
+}
+
 async function handlePair(req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<void> {
   if (req.method === "GET") {
-    // Issue a pre-auth CSRF token bound to a temporary "pair" session cookie so
-    // the POST has a double-submit pair.
-    const cookies = readCookies(req);
-    let csrf = cookies["ebh_pair_csrf"];
-    if (!csrf) {
-      csrf = randomToken(16);
-      appendSetCookie(res, `ebh_pair_csrf=${csrf}; HttpOnly; Path=/; SameSite=Lax; Max-Age=600${COOKIE_SECURE ? "; Secure" : ""}`);
-    }
-    sendHtml(res, 200, renderPairHtml({ csrf_token: csrf, error: url.searchParams.get("error") || undefined }));
+    sendHtml(res, 200, renderPairHtml({ csrf_token: ensurePairCsrf(req, res), error: url.searchParams.get("error") || undefined }));
     return;
   }
   if (req.method !== "POST") {
@@ -227,7 +234,9 @@ async function handlePair(req: http.IncomingMessage, res: http.ServerResponse, u
   // never trip this. (ea-claude-058)
   const gate = pairLimiter.peek(ip);
   if (!gate.allowed) {
-    sendHtml(res, 429, renderPairHtml({ csrf_token: "", error: `Too many attempts. Try again in ${Math.ceil(gate.retry_after_ms / 1000)}s.` }));
+    // Keep a usable token so the user can submit immediately once the lockout
+    // clears — no manual reload needed (ea-claude-054).
+    sendHtml(res, 429, renderPairHtml({ csrf_token: ensurePairCsrf(req, res), error: `Too many attempts. Try again in ${Math.ceil(gate.retry_after_ms / 1000)}s.` }));
     return;
   }
   let body: Buffer;
@@ -236,7 +245,8 @@ async function handlePair(req: http.IncomingMessage, res: http.ServerResponse, u
   const cookies = readCookies(req);
   if (!form.csrf || !cookies["ebh_pair_csrf"] || form.csrf !== cookies["ebh_pair_csrf"]) {
     // A stale/missing CSRF token is a benign fumble, not a guess — don't count it.
-    sendHtml(res, 403, renderPairHtml({ csrf_token: "", error: "Session expired. Reload and try again." }));
+    // Re-issue a matching token so the next submit works without a manual reload.
+    sendHtml(res, 403, renderPairHtml({ csrf_token: ensurePairCsrf(req, res), error: "Your form expired. Please try again." }));
     return;
   }
   const code = normalizePairingCode(form.code || "");
@@ -244,7 +254,7 @@ async function handlePair(req: http.IncomingMessage, res: http.ServerResponse, u
   if (!channel_id) {
     // A wrong/expired code IS a guess — count it toward the lockout.
     pairLimiter.recordFailure(ip);
-    sendHtml(res, 400, renderPairHtml({ csrf_token: cookies["ebh_pair_csrf"] || randomToken(16), error: "Invalid or expired code. Run `edge-book pair` on your agent for a fresh one." }));
+    sendHtml(res, 400, renderPairHtml({ csrf_token: ensurePairCsrf(req, res), error: "Invalid or expired code. Run `edge-book pair` on your agent for a fresh one." }));
     return;
   }
   // Successful pair — clear this IP's failure budget so it never accumulates.
