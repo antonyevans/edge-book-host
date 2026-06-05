@@ -75,6 +75,25 @@ test("reader HTML exposes the Shared-with-me and Add-me surfaces", () => {
   assert.match(html, /no end-to-end encryption claim/i, "honest privacy posture shown");
 });
 
+// ── ea-claude-051 regression: mutations re-fetch + re-render ──────────────────
+// After a successful create/action the reader must re-fetch so the new post (and
+// the summary counters, derived from the same state.posts) appear without a
+// manual reload. Verified live in a browser; this guards the wiring from removal.
+test("reader re-renders after a mutation (createPost + runAction call refresh)", () => {
+  const html = renderReaderHtml({ csrf_token: "csrf123", agent_online: true });
+  // Body of a named function = from its declaration up to the next "function " decl.
+  function body(name: string): string {
+    const start = html.indexOf(name);
+    assert.ok(start >= 0, `${name} present`);
+    const after = html.indexOf("function ", start + name.length);
+    return html.slice(start, after === -1 ? undefined : after);
+  }
+  assert.match(body("async function createPost"), /await refresh\(\)/, "createPost re-fetches after POST /api/posts");
+  assert.match(body("async function runAction"), /await refresh\(\)/, "runAction re-fetches after a mutation");
+  // Summary draft counter is derived from the same fetched state, not a separate source.
+  assert.match(html, /setText\("summaryDrafts", draftPosts\(\)\.length\)/, "summary counter derives from state.posts");
+});
+
 // ── Granted recipient: the shared object reaches the reader via the proxy ─────
 test("a granted reader receives the shared object through the host proxy", async () => {
   const agent = await spawnAgent(ctx.wsUrl, {
