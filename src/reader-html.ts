@@ -616,7 +616,7 @@ const READER_SCRIPT = `<script>
     facts && facts.filter(Boolean).forEach(function(f) { allDetails.push(escapeHtml(f)); });
     var uid = "md-" + Math.random().toString(36).slice(2);
     var detailHtml = '<div class="meta-detail" id="' + uid + '">' + allDetails.join('<br>') + '</div>';
-    var toggleHtml = '<span class="meta-toggle inspect-tag" onclick="var d=document.getElementById(\'' + uid + '\');d.classList.toggle(\'open\')">details</span>';
+    var toggleHtml = '<span class="meta-toggle inspect-tag" onclick="this.parentElement.nextElementSibling.classList.toggle(&#39;open&#39;)">details</span>';
     return '<div class="scope">🔒 Shared with ' + bold + basisText + ' ' + toggleHtml + '</div>' + detailHtml;
   }
   function item(title, body, facts, payload, classes, actions, trust, timestamp, avatar) {
