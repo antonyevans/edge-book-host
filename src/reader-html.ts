@@ -746,6 +746,19 @@ const READER_SCRIPT = `<script>
         (e.statement ? ' — ' + escapeHtml(e.statement) : "") + evidence + '</div>';
     }).join("") + '</div>';
   }
+  function answersForParent(parentUri) {
+    return values(state.answers).filter(function (a) {
+      return a && a.parent && a.parent.uri === parentUri && a.lifecycle !== "tombstoned";
+    });
+  }
+  function renderAnswerAnnotations(parentUri) {
+    var list = answersForParent(parentUri);
+    if (!list.length) return "";
+    return '<div class="answers">' + list.map(function (a) {
+      return '<div class="answer"><span class="answer-arrow">&#8627;</span> <b>' + escapeHtml(agentLabel(a.answerer_agent_id)) + '</b>' +
+        (a.body ? ' &mdash; ' + escapeHtml(a.body) : "") + '</div>';
+    }).join("") + '</div>';
+  }
   function agentLabel(agentId) {
     if (!agentId) return "Local owner";
     if (state.me && state.me.agent_id === agentId) return publicOwnerLabel();
