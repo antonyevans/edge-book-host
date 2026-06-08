@@ -540,7 +540,8 @@ const READER_SCRIPT = `<script>
     endorsements: {},
     attestations: {},
     ephemeral: {},
-    answers: {}
+    answers: {},
+    received: { signals: {}, ephemeral: {}, answers: {}, endorsements: {} }
   };
   const titleByView = {
     profile: "Profile", feed: "Feed", shared: "Shared with me", contacts: "Friends and contacts",
@@ -727,7 +728,7 @@ const READER_SCRIPT = `<script>
   }
   function contactFor(agentId) { return state.contacts[agentId] || {}; }
   function endorsementsForParent(parentUri) {
-    return values(state.endorsements).filter(function (e) {
+    return values(state.endorsements).concat(values(state.received.endorsements)).filter(function (e) {
       return e && e.parent && e.parent.uri === parentUri;
     });
   }
@@ -751,7 +752,7 @@ const READER_SCRIPT = `<script>
     }).join("") + '</div>';
   }
   function answersForParent(parentUri) {
-    return values(state.answers).filter(function (a) {
+    return values(state.answers).concat(values(state.received.answers)).filter(function (a) {
       return a && a.parent && a.parent.uri === parentUri && a.lifecycle !== "tombstoned";
     });
   }
@@ -902,7 +903,7 @@ const READER_SCRIPT = `<script>
     }
     if (state.view === "feed") {
       const posts = state.posts;
-      const signalHtml = values(state.signals)
+      const signalHtml = values(state.signals).concat(values(state.received.signals))
         .filter(function (s) { return s.lifecycle !== "expired"; })
         .sort(function (a, b) { return Date.parse(b.created_at) - Date.parse(a.created_at); })
         .map(renderSignalCard).join("");
@@ -924,7 +925,7 @@ const READER_SCRIPT = `<script>
         initials(agentLabel(feed.origin_agent_id)))
         + renderEndorsementAnnotations("edgebook:post:" + feed.post_id);   // R5: annotations on the post
       }).join("");
-      const ephemeralHtml = values(state.ephemeral)
+      const ephemeralHtml = values(state.ephemeral).concat(values(state.received.ephemeral))
         .filter(function (p) { return !EPHEMERAL_TERMINAL[p.lifecycle]; })
         .sort(function (a, b) { return Date.parse(b.created_at) - Date.parse(a.created_at); })
         .map(function (p) {
@@ -1140,7 +1141,8 @@ const READER_SCRIPT = `<script>
         api("/api/endorsements").catch(function () { return { endorsements: {} }; }),
         api("/api/attestations").catch(function () { return { attestations: {} }; }),
         api("/api/ephemeral").catch(function () { return { ephemeral: {} }; }),
-        api("/api/answers").catch(function () { return { answers: {} }; })
+        api("/api/answers").catch(function () { return { answers: {} }; }),
+        api("/api/received").catch(function () { return { signals: {}, ephemeral: {}, answers: {}, endorsements: {} }; })
       ]);
       const contacts = sets[0], posts = sets[1], feed = sets[2], approvals = sets[3], audit = sets[4];
       state.contacts = contacts.contacts;
@@ -1152,6 +1154,7 @@ const READER_SCRIPT = `<script>
       state.attestations = (sets[10] && sets[10].attestations) || {};
       state.ephemeral = (sets[11] && sets[11].ephemeral) || {};
       state.answers = (sets[12] && sets[12].answers) || {};
+      state.received = sets[13] || { signals: {}, ephemeral: {}, answers: {}, endorsements: {} };
       state.mutes = contacts.mutes;
       state.posts = posts.posts;
       state.feedItems = feed.feed_items;
