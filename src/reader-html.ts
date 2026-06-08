@@ -686,6 +686,27 @@ const READER_SCRIPT = `<script>
     return text.toUpperCase();
   }
   function contactFor(agentId) { return state.contacts[agentId] || {}; }
+  function endorsementsForParent(parentUri) {
+    return values(state.endorsements).filter(function (e) {
+      return e && e.parent && e.parent.uri === parentUri;
+    });
+  }
+  function attestationForEndorsement(e) {
+    if (e.evidence_ref && e.evidence_ref.hash) return state.attestations[e.evidence_ref.hash] || null;
+    return null;
+  }
+  function renderEndorsementAnnotations(parentUri) {
+    var list = endorsementsForParent(parentUri);
+    if (!list.length) return "";
+    return '<div class="endorsements">' + list.map(function (e) {
+      var att = attestationForEndorsement(e);
+      var evidence = att
+        ? '<div class="endorsement-evidence">Evidence: ' + escapeHtml(labelize(att.outcome)) + ' · ' + escapeHtml(att.summary || "") + ' · <span class="hashref">' + escapeHtml(shortId(att.attestation_id)) + '</span></div>'
+        : (e.evidence_task_id ? '<div class="endorsement-evidence">Evidence: task ' + escapeHtml(e.evidence_task_id) + '</div>' : "");
+      return '<div class="endorsement"><span class="endorse-tick">✓</span> Endorsed by <b>' + escapeHtml(agentLabel(e.endorser_agent_id)) + '</b>' +
+        (e.statement ? ' — ' + escapeHtml(e.statement) : "") + evidence + '</div>';
+    }).join("") + '</div>';
+  }
   function agentLabel(agentId) {
     if (!agentId) return "Local owner";
     if (state.me && state.me.agent_id === agentId) return publicOwnerLabel();
