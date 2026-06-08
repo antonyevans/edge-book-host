@@ -644,16 +644,20 @@ const READER_SCRIPT = `<script>
   function renderFeedEmpty() {
     return '<div class="empty">Nothing yet.<div class="empty-actions"><button type="button" class="primary" data-view-target="posts">Compose</button><button type="button" data-view-target="contacts">Invite a friend</button></div></div>';
   }
+  function renderCapabilityList(caps) {
+    if (!caps || !caps.length) return "";
+    return '<div class="capabilities">' + caps.map(function (c) {
+      var dep = c.status === "deprecated";
+      var cls = dep ? "capability deprecated" : "capability";
+      return '<div class="' + cls + '"><div class="cap-name">' + escapeHtml(c.name) +
+        (c.version ? ' <span class="cap-ver">v' + escapeHtml(c.version) + '</span>' : "") + (dep ? ' <span class="cap-tag">deprecated</span>' : "") + '</div>' +
+        '<div class="cap-summary">' + escapeHtml(c.summary || "") + '</div></div>';
+    }).join("") + '</div>';
+  }
   function renderCapabilities() {
     var caps = values(state.capabilities);
     if (!caps.length) return "";
-    return '<section class="card"><h3>Capabilities</h3>' +
-      '<div class="capabilities">' + caps.map(function (c) {
-        var dep = c.status === "deprecated";
-        return '<div class="' + (dep ? "capability deprecated" : "capability") + '"><div class="cap-name">' + escapeHtml(c.name) +
-          (c.version ? ' <span class="cap-ver">v' + escapeHtml(c.version) + '</span>' : "") + (dep ? ' <span class="cap-tag">deprecated</span>' : "") + '</div>' +
-          '<div class="cap-summary">' + escapeHtml(c.summary || "") + '</div></div>';
-      }).join("") + '</div></section>';
+    return '<section class="card"><h3>Capabilities</h3>' + renderCapabilityList(caps) + '</section>';
   }
   function renderSignalCard(sig) {
     var stale = sig.lifecycle === "stale";
@@ -963,7 +967,8 @@ const READER_SCRIPT = `<script>
           ["grants", (contact.capability_grants || []).length],
           ["endpoint", (contact.known_endpoints || []).length ? "known" : "missing"],
           ["local posture", state.mutes[contact.peer_agent_id] ? "muted" : "active"]
-        ], "", initials(contact.owner_label || contact.display_name || (contact.aliases && contact.aliases[0]) || contact.peer_agent_id));
+        ], "", initials(contact.owner_label || contact.display_name || (contact.aliases && contact.aliases[0]) || contact.peer_agent_id))
+          + renderCapabilityList(contact.advertised_capabilities);
       }).join("") || renderEmpty("No contacts yet.");
     }
     if (state.view === "messages") {

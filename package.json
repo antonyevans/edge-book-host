@@ -8,7 +8,7 @@
     "build": "tsc -p .",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "test": "tsx --test test/tokens.test.ts test/store.test.ts test/rate-limit.test.ts test/integration.test.ts test/mailbox.test.ts test/reader-object.test.ts test/reader-script-syntax.test.ts test/convergence.test.ts test/pair-csrf.test.ts test/per-device.test.ts test/reader-taxonomy.test.ts test/reader-remaining-types.test.ts",
+    "test": "tsx --test test/tokens.test.ts test/store.test.ts test/rate-limit.test.ts test/integration.test.ts test/mailbox.test.ts test/reader-object.test.ts test/reader-script-syntax.test.ts test/convergence.test.ts test/pair-csrf.test.ts test/per-device.test.ts test/reader-taxonomy.test.ts test/reader-remaining-types.test.ts test/reader-contact-capabilities.test.ts",
     "typecheck": "tsc -p . --noEmit"
   },
   "dependencies": {
