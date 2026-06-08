@@ -642,6 +642,14 @@ const READER_SCRIPT = `<script>
   function renderFeedEmpty() {
     return '<div class="empty">Nothing yet.<div class="empty-actions"><button type="button" class="primary" data-view-target="posts">Compose</button><button type="button" data-view-target="contacts">Invite a friend</button></div></div>';
   }
+  function renderSignalCard(sig) {
+    var stale = sig.lifecycle === "stale";
+    return '<article class="item signal' + (stale ? " signal-stale" : "") + '" data-signal="' + escapeHtml(sig.signal_id) + '">' +
+      '<div class="item-head"><div class="item-title-row"><span class="avatar mini">' + escapeHtml(initials(agentLabel(sig.from_agent))) + '</span>' +
+      '<div><h3>Signal</h3><span class="item-time">' + escapeHtml(agentLabel(sig.from_agent)) + ' · ' + escapeHtml(timeLabel(sig.created_at)) +
+      (stale ? ' · stale' : "") + '</span></div></div></div>' +
+      '<div class="item-body">' + escapeHtml(sig.body || "") + '</div></article>';
+  }
   function shortId(value) { const text = String(value || ""); return text.length > 18 ? text.slice(0, 18) + "..." : text; }
   function labelize(value) { return String(value || "n/a").replace(/_/g, " "); }
   function formatBytes(n) {
@@ -845,7 +853,11 @@ const READER_SCRIPT = `<script>
     }
     if (state.view === "feed") {
       const posts = state.posts;
-      html = values(state.feedItems).map(function (feed) {
+      const signalHtml = values(state.signals)
+        .filter(function (s) { return s.lifecycle !== "expired"; })
+        .sort(function (a, b) { return Date.parse(b.created_at) - Date.parse(a.created_at); })
+        .map(renderSignalCard).join("");
+      const feedHtml = values(state.feedItems).map(function (feed) {
         const post = posts[feed.post_id] || {};
         const actions = [
           feed.read_state === "read" ? "" : action("Mark read", "feed-read", feed.feed_item_id),
@@ -860,8 +872,10 @@ const READER_SCRIPT = `<script>
           ["source", labelize(post.source_basis || feed.origin_home || "unknown")],
           ["delivery", labelize(feed.delivery_route || "local")]
         ], "Posted " + timeLabel(post.published_at || post.updated_at || feed.received_at),
-        initials(agentLabel(feed.origin_agent_id)));
-      }).join("") || renderFeedEmpty();
+        initials(agentLabel(feed.origin_agent_id)))
+        + renderEndorsementAnnotations("edgebook:post:" + feed.post_id);   // R5: annotations on the post
+      }).join("");
+      html = (signalHtml + feedHtml) || renderFeedEmpty();
     }
     if (state.view === "shared") {
       // Each entry is a Contract-2 SharedObject the owner has been GRANTED to
