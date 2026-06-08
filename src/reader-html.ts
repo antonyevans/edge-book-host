@@ -534,7 +534,11 @@ const READER_SCRIPT = `<script>
     messages: [],
     audit: [],
     shared: [],
-    invite: null
+    invite: null,
+    signals: {},
+    capabilities: {},
+    endorsements: {},
+    attestations: {}
   };
   const titleByView = {
     profile: "Profile", feed: "Feed", shared: "Shared with me", contacts: "Friends and contacts",
@@ -638,6 +642,25 @@ const READER_SCRIPT = `<script>
   function renderFeedEmpty() {
     return '<div class="empty">Nothing yet.<div class="empty-actions"><button type="button" class="primary" data-view-target="posts">Compose</button><button type="button" data-view-target="contacts">Invite a friend</button></div></div>';
   }
+  function renderCapabilities() {
+    var caps = values(state.capabilities);
+    if (!caps.length) return "";
+    return '<section class="card"><h3>Capabilities</h3>' +
+      '<div class="capabilities">' + caps.map(function (c) {
+        var dep = c.status === "deprecated";
+        return '<div class="' + (dep ? "capability deprecated" : "capability") + '"><div class="cap-name">' + escapeHtml(c.name) +
+          (c.version ? ' <span class="cap-ver">v' + escapeHtml(c.version) + '</span>' : "") + (dep ? ' <span class="cap-tag">deprecated</span>' : "") + '</div>' +
+          '<div class="cap-summary">' + escapeHtml(c.summary || "") + '</div></div>';
+      }).join("") + '</div></section>';
+  }
+  function renderSignalCard(sig) {
+    var stale = sig.lifecycle === "stale";
+    return '<article class="item signal' + (stale ? " signal-stale" : "") + '" data-signal="' + escapeHtml(sig.signal_id) + '">' +
+      '<div class="item-head"><div class="item-title-row"><span class="avatar mini">' + escapeHtml(initials(agentLabel(sig.from_agent))) + '</span>' +
+      '<div><h3>Signal</h3><span class="item-time">' + escapeHtml(agentLabel(sig.from_agent)) + ' · ' + escapeHtml(timeLabel(sig.created_at)) +
+      (stale ? ' · stale' : "") + '</span></div></div></div>' +
+      '<div class="item-body">' + escapeHtml(sig.body || "") + '</div></article>';
+  }
   function shortId(value) { const text = String(value || ""); return text.length > 18 ? text.slice(0, 18) + "..." : text; }
   function labelize(value) { return String(value || "n/a").replace(/_/g, " "); }
   function formatBytes(n) {
@@ -682,6 +705,30 @@ const READER_SCRIPT = `<script>
     return text.toUpperCase();
   }
   function contactFor(agentId) { return state.contacts[agentId] || {}; }
+  function endorsementsForParent(parentUri) {
+    return values(state.endorsements).filter(function (e) {
+      return e && e.parent && e.parent.uri === parentUri;
+    });
+  }
+  function attestationForEndorsement(e) {
+    // A Result Attestation is content-addressed: its map key IS its attestation_id,
+    // and an endorsement's evidence_ref.hash holds that same attestation_id. So the
+    // hash IS the lookup key here — do not "fix" this to attestation_id.
+    if (e.evidence_ref && e.evidence_ref.hash) return state.attestations[e.evidence_ref.hash] || null;
+    return null;
+  }
+  function renderEndorsementAnnotations(parentUri) {
+    var list = endorsementsForParent(parentUri);
+    if (!list.length) return "";
+    return '<div class="endorsements">' + list.map(function (e) {
+      var att = attestationForEndorsement(e);
+      var evidence = att
+        ? '<div class="endorsement-evidence">Evidence: ' + escapeHtml(labelize(att.outcome)) + ' · ' + escapeHtml(att.summary || "") + ' · <span class="hashref">' + escapeHtml(shortId(att.attestation_id)) + '</span></div>'
+        : (e.evidence_task_id ? '<div class="endorsement-evidence">Evidence: task ' + escapeHtml(e.evidence_task_id) + '</div>' : "");
+      return '<div class="endorsement"><span class="endorse-tick">✓</span> Endorsed by <b>' + escapeHtml(agentLabel(e.endorser_agent_id)) + '</b>' +
+        (e.statement ? ' — ' + escapeHtml(e.statement) : "") + evidence + '</div>';
+    }).join("") + '</div>';
+  }
   function agentLabel(agentId) {
     if (!agentId) return "Local owner";
     if (state.me && state.me.agent_id === agentId) return publicOwnerLabel();
@@ -804,6 +851,7 @@ const READER_SCRIPT = `<script>
           ["activity events", state.audit.length]
         ]) +
         '<div class="view-copy">Endpoint and key material are kept out of the main profile surface; inspect technical evidence only when needed.</div></section>' +
+        renderCapabilities() +
         values(state.posts).slice(0, 6).map(function (post) {
           return item(post.title, post.body, [
             "status: " + labelize(post.status),
@@ -820,7 +868,11 @@ const READER_SCRIPT = `<script>
     }
     if (state.view === "feed") {
       const posts = state.posts;
-      html = values(state.feedItems).map(function (feed) {
+      const signalHtml = values(state.signals)
+        .filter(function (s) { return s.lifecycle !== "expired"; })
+        .sort(function (a, b) { return Date.parse(b.created_at) - Date.parse(a.created_at); })
+        .map(renderSignalCard).join("");
+      const feedHtml = values(state.feedItems).map(function (feed) {
         const post = posts[feed.post_id] || {};
         const actions = [
           feed.read_state === "read" ? "" : action("Mark read", "feed-read", feed.feed_item_id),
@@ -835,8 +887,10 @@ const READER_SCRIPT = `<script>
           ["source", labelize(post.source_basis || feed.origin_home || "unknown")],
           ["delivery", labelize(feed.delivery_route || "local")]
         ], "Posted " + timeLabel(post.published_at || post.updated_at || feed.received_at),
-        initials(agentLabel(feed.origin_agent_id)));
-      }).join("") || renderFeedEmpty();
+        initials(agentLabel(feed.origin_agent_id)))
+        + renderEndorsementAnnotations("edgebook:post:" + feed.post_id);   // R5: annotations on the post
+      }).join("");
+      html = (signalHtml + feedHtml) || renderFeedEmpty();
     }
     if (state.view === "shared") {
       // Each entry is a Contract-2 SharedObject the owner has been GRANTED to
@@ -857,7 +911,8 @@ const READER_SCRIPT = `<script>
           ["signature", obj.signature ? "present" : "missing"]
         ];
         const attActions = att ? action("Open attachment", "shared-open-attachment", obj.object_id) : "";
-        return item(req.title || "Untitled request", req.body || "", facts, obj, "", attActions, trust, "Shared " + timeLabel(obj.created_at));
+        return item(req.title || "Untitled request", req.body || "", facts, obj, "", attActions, trust, "Shared " + timeLabel(obj.created_at))
+          + renderEndorsementAnnotations("edgebook:object:" + obj.object_id);   // R5: annotation on the parent object
       }).join("") || renderEmpty("Nothing has been shared with you yet. A shared object appears here only when a contact grants you access to it.");
     }
     if (state.view === "add") {
@@ -1038,12 +1093,20 @@ const READER_SCRIPT = `<script>
         // Contract-2 surfaces (ea-claude-066/067). Tolerant of older agents that
         // don't expose them yet — the views just stay empty.
         api("/api/shared-objects").catch(function () { return { objects: [] }; }),
-        api("/api/invite").catch(function () { return null; })
+        api("/api/invite").catch(function () { return null; }),
+        api("/api/signals").catch(function () { return { signals: {} }; }),
+        api("/api/capabilities").catch(function () { return { capabilities: {} }; }),
+        api("/api/endorsements").catch(function () { return { endorsements: {} }; }),
+        api("/api/attestations").catch(function () { return { attestations: {} }; })
       ]);
       const contacts = sets[0], posts = sets[1], feed = sets[2], approvals = sets[3], audit = sets[4];
       state.contacts = contacts.contacts;
       state.shared = (sets[5] && sets[5].objects) || [];
       state.invite = sets[6];
+      state.signals = (sets[7] && sets[7].signals) || {};
+      state.capabilities = (sets[8] && sets[8].capabilities) || {};
+      state.endorsements = (sets[9] && sets[9].endorsements) || {};
+      state.attestations = (sets[10] && sets[10].attestations) || {};
       state.mutes = contacts.mutes;
       state.posts = posts.posts;
       state.feedItems = feed.feed_items;
@@ -2083,4 +2146,20 @@ pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 12px;
   nav button { margin: 0; }
   .trust-strip, .detail-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Post-taxonomy types (spec-0021) ── */
+.endorsements { margin: 8px 0 0; display: grid; gap: 6px; }
+.endorsement { font-size: 12.5px; color: var(--ink); border-left: 2px solid var(--ember); padding: 4px 0 4px 10px; }
+.endorse-tick { color: var(--ember); font-weight: 700; }
+.endorsement-evidence { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.endorsement-evidence .hashref { font-family: var(--mono, monospace); }
+.signal .item-body { color: var(--ink); }
+.signal-stale { opacity: 0.6; }
+.capabilities { display: grid; gap: 8px; margin-top: 6px; }
+.capability { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+.capability.deprecated { opacity: 0.55; }
+.cap-name { font-weight: 600; font-size: 13.5px; }
+.cap-ver { color: var(--muted); font-weight: 400; font-size: 11.5px; }
+.cap-tag { color: var(--amber); font-size: 11px; border: 1px solid var(--amber); border-radius: 10px; padding: 0 6px; }
+.cap-summary { color: var(--muted); font-size: 12px; margin-top: 2px; }
 </style>`;
