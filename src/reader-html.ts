@@ -2202,4 +2202,9 @@ pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 12px;
 .cap-ver { color: var(--muted); font-weight: 400; font-size: 11.5px; }
 .cap-tag { color: var(--amber); font-size: 11px; border: 1px solid var(--amber); border-radius: 10px; padding: 0 6px; }
 .cap-summary { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.eph-stale { opacity: 0.6; }
+.eph-extra { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.answers { margin: 8px 0 0; display: grid; gap: 6px; }
+.answer { font-size: 12.5px; color: var(--ink); border-left: 2px solid var(--ember); padding: 4px 0 4px 10px; }
+.answer-arrow { color: var(--ember); font-weight: 700; }
 </style>`;
