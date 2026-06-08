@@ -967,7 +967,8 @@ const READER_SCRIPT = `<script>
           ["grants", (contact.capability_grants || []).length],
           ["endpoint", (contact.known_endpoints || []).length ? "known" : "missing"],
           ["local posture", state.mutes[contact.peer_agent_id] ? "muted" : "active"]
-        ], "", initials(contact.owner_label || contact.display_name || (contact.aliases && contact.aliases[0]) || contact.peer_agent_id));
+        ], "", initials(contact.owner_label || contact.display_name || (contact.aliases && contact.aliases[0]) || contact.peer_agent_id))
+          + renderCapabilityList(contact.advertised_capabilities);
       }).join("") || renderEmpty("No contacts yet.");
     }
     if (state.view === "messages") {
