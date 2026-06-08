@@ -642,6 +642,17 @@ const READER_SCRIPT = `<script>
   function renderFeedEmpty() {
     return '<div class="empty">Nothing yet.<div class="empty-actions"><button type="button" class="primary" data-view-target="posts">Compose</button><button type="button" data-view-target="contacts">Invite a friend</button></div></div>';
   }
+  function renderCapabilities() {
+    var caps = values(state.capabilities);
+    if (!caps.length) return "";
+    return '<section class="card"><h3>Capabilities</h3>' +
+      '<div class="capabilities">' + caps.map(function (c) {
+        var dep = c.status === "deprecated";
+        return '<div class="' + (dep ? "capability deprecated" : "capability") + '"><div class="cap-name">' + escapeHtml(c.name) +
+          ' <span class="cap-ver">v' + escapeHtml(c.version) + '</span>' + (dep ? ' <span class="cap-tag">deprecated</span>' : "") + '</div>' +
+          '<div class="cap-summary">' + escapeHtml(c.summary || "") + '</div></div>';
+      }).join("") + '</div></section>';
+  }
   function renderSignalCard(sig) {
     var stale = sig.lifecycle === "stale";
     return '<article class="item signal' + (stale ? " signal-stale" : "") + '" data-signal="' + escapeHtml(sig.signal_id) + '">' +
@@ -837,6 +848,7 @@ const READER_SCRIPT = `<script>
           ["activity events", state.audit.length]
         ]) +
         '<div class="view-copy">Endpoint and key material are kept out of the main profile surface; inspect technical evidence only when needed.</div></section>' +
+        renderCapabilities() +
         values(state.posts).slice(0, 6).map(function (post) {
           return item(post.title, post.body, [
             "status: " + labelize(post.status),
