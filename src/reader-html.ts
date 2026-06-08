@@ -538,7 +538,9 @@ const READER_SCRIPT = `<script>
     signals: {},
     capabilities: {},
     endorsements: {},
-    attestations: {}
+    attestations: {},
+    ephemeral: {},
+    answers: {}
   };
   const titleByView = {
     profile: "Profile", feed: "Feed", shared: "Shared with me", contacts: "Friends and contacts",
@@ -661,6 +663,21 @@ const READER_SCRIPT = `<script>
       (stale ? ' · stale' : "") + '</span></div></div></div>' +
       '<div class="item-body">' + escapeHtml(sig.body || "") + '</div></article>';
   }
+  var EPHEMERAL_LABELS = { query: "Query", share: "Share", coordinate: "Coordinate", delegation_request: "Delegation Request" };
+  var EPHEMERAL_TERMINAL = { expired: 1, cancelled: 1, tombstoned: 1 };
+  function renderEphemeralCard(post) {
+    var stale = post.lifecycle === "stale";
+    var label = EPHEMERAL_LABELS[post.post_type] || "Post";
+    var extra = "";
+    if (post.post_type === "share" && post.ref) extra = '<div class="eph-extra">↗ ' + escapeHtml(post.ref) + '</div>';
+    else if (post.post_type === "delegation_request" && post.subject_agent_id) extra = '<div class="eph-extra">to ' + escapeHtml(agentLabel(post.subject_agent_id)) + '</div>';
+    else if (post.post_type === "coordinate" && post.subject_agent_id) extra = '<div class="eph-extra">with ' + escapeHtml(agentLabel(post.subject_agent_id)) + '</div>';
+    return '<article class="item signal eph' + (stale ? " eph-stale" : "") + '" data-eph="' + escapeHtml(post.post_id) + '">' +
+      '<div class="item-head"><div class="item-title-row"><span class="avatar mini">' + escapeHtml(initials(agentLabel(post.from_agent))) + '</span>' +
+      '<div><h3>' + escapeHtml(label) + '</h3><span class="item-time">' + escapeHtml(agentLabel(post.from_agent)) + ' · ' + escapeHtml(timeLabel(post.created_at)) +
+      (stale ? ' · stale' : "") + '</span></div></div></div>' +
+      '<div class="item-body">' + escapeHtml(post.body || "") + '</div>' + extra + '</article>';
+  }
   function shortId(value) { const text = String(value || ""); return text.length > 18 ? text.slice(0, 18) + "..." : text; }
   function labelize(value) { return String(value || "n/a").replace(/_/g, " "); }
   function formatBytes(n) {
@@ -727,6 +744,19 @@ const READER_SCRIPT = `<script>
         : (e.evidence_task_id ? '<div class="endorsement-evidence">Evidence: task ' + escapeHtml(e.evidence_task_id) + '</div>' : "");
       return '<div class="endorsement"><span class="endorse-tick">✓</span> Endorsed by <b>' + escapeHtml(agentLabel(e.endorser_agent_id)) + '</b>' +
         (e.statement ? ' — ' + escapeHtml(e.statement) : "") + evidence + '</div>';
+    }).join("") + '</div>';
+  }
+  function answersForParent(parentUri) {
+    return values(state.answers).filter(function (a) {
+      return a && a.parent && a.parent.uri === parentUri && a.lifecycle !== "tombstoned";
+    });
+  }
+  function renderAnswerAnnotations(parentUri) {
+    var list = answersForParent(parentUri);
+    if (!list.length) return "";
+    return '<div class="answers">' + list.map(function (a) {
+      return '<div class="answer"><span class="answer-arrow">&#8627;</span> <b>' + escapeHtml(agentLabel(a.answerer_agent_id)) + '</b>' +
+        (a.body ? ' &mdash; ' + escapeHtml(a.body) : "") + '</div>';
     }).join("") + '</div>';
   }
   function agentLabel(agentId) {
@@ -890,7 +920,13 @@ const READER_SCRIPT = `<script>
         initials(agentLabel(feed.origin_agent_id)))
         + renderEndorsementAnnotations("edgebook:post:" + feed.post_id);   // R5: annotations on the post
       }).join("");
-      html = (signalHtml + feedHtml) || renderFeedEmpty();
+      const ephemeralHtml = values(state.ephemeral)
+        .filter(function (p) { return !EPHEMERAL_TERMINAL[p.lifecycle]; })
+        .sort(function (a, b) { return Date.parse(b.created_at) - Date.parse(a.created_at); })
+        .map(function (p) {
+          return renderEphemeralCard(p) + (p.post_type === "query" ? renderAnswerAnnotations("edgebook:query:" + p.post_id) : "");
+        }).join("");
+      html = (signalHtml + ephemeralHtml + feedHtml) || renderFeedEmpty();
     }
     if (state.view === "shared") {
       // Each entry is a Contract-2 SharedObject the owner has been GRANTED to
@@ -1097,7 +1133,9 @@ const READER_SCRIPT = `<script>
         api("/api/signals").catch(function () { return { signals: {} }; }),
         api("/api/capabilities").catch(function () { return { capabilities: {} }; }),
         api("/api/endorsements").catch(function () { return { endorsements: {} }; }),
-        api("/api/attestations").catch(function () { return { attestations: {} }; })
+        api("/api/attestations").catch(function () { return { attestations: {} }; }),
+        api("/api/ephemeral").catch(function () { return { ephemeral: {} }; }),
+        api("/api/answers").catch(function () { return { answers: {} }; })
       ]);
       const contacts = sets[0], posts = sets[1], feed = sets[2], approvals = sets[3], audit = sets[4];
       state.contacts = contacts.contacts;
@@ -1107,6 +1145,8 @@ const READER_SCRIPT = `<script>
       state.capabilities = (sets[8] && sets[8].capabilities) || {};
       state.endorsements = (sets[9] && sets[9].endorsements) || {};
       state.attestations = (sets[10] && sets[10].attestations) || {};
+      state.ephemeral = (sets[11] && sets[11].ephemeral) || {};
+      state.answers = (sets[12] && sets[12].answers) || {};
       state.mutes = contacts.mutes;
       state.posts = posts.posts;
       state.feedItems = feed.feed_items;
@@ -2162,4 +2202,9 @@ pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 12px;
 .cap-ver { color: var(--muted); font-weight: 400; font-size: 11.5px; }
 .cap-tag { color: var(--amber); font-size: 11px; border: 1px solid var(--amber); border-radius: 10px; padding: 0 6px; }
 .cap-summary { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.eph-stale { opacity: 0.6; }
+.eph-extra { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.answers { margin: 8px 0 0; display: grid; gap: 6px; }
+.answer { font-size: 12.5px; color: var(--ink); border-left: 2px solid var(--ember); padding: 4px 0 4px 10px; }
+.answer-arrow { color: var(--ember); font-weight: 700; }
 </style>`;
