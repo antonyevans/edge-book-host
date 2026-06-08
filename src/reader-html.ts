@@ -60,7 +60,7 @@ export function renderReaderHtml(ctx: ReaderContext): string {
     <div class="page">
     <nav aria-label="Sanctum views">
       <div class="owner-card">
-        <div class="avatar">EB</div>
+        <div id="ownerAvatar" class="avatar">EB</div>
         <div>
           <div id="ownerName" class="owner-name">Connecting...</div>
           <div id="ownerShort" class="owner-id">your sanctum</div>
@@ -666,7 +666,16 @@ const READER_SCRIPT = `<script>
     const privacy = '<div class="view-copy">Honest privacy posture: envelopes are relayed through the host, which can in principle read them in transit &mdash; there is no end-to-end encryption claim for this MVP.</div>';
     return head + linkRow + qrBlock + steps + privacy + '</section>';
   }
-  function publicOwnerLabel() { return (state.me && state.me.display_name) || "Local owner"; }
+  // The human who owns the agent (owner_label) is the primary name; fall back to
+  // the agent's own display_name, then a generic label.
+  function publicOwnerLabel() { return (state.me && (state.me.owner_label || state.me.display_name)) || "Local owner"; }
+  // The agent's own name — shown as a subtitle when it differs from the owner.
+  function agentSubLabel() {
+    if (!state.me) return "hosted session";
+    var owner = state.me.owner_label;
+    var agent = state.me.display_name;
+    return (owner && agent && owner !== agent) ? agent : "hosted session";
+  }
   function initials(label) {
     const words = String(label || "EB").replace(/[^a-z0-9 ]/gi, " ").trim().split(/\\s+/).filter(Boolean);
     const text = ((words[0] && words[0][0]) || "E") + ((words[1] && words[1][0]) || (words[0] && words[0][1]) || "B");
@@ -786,7 +795,7 @@ const READER_SCRIPT = `<script>
     const content = document.getElementById("content");
     let html = "";
     if (state.view === "profile") {
-      html = '<section class="profile-panel"><div class="profile-head"><div class="avatar">EB</div><div><div class="profile-name">' + escapeHtml(publicOwnerLabel()) + '</div><div class="profile-meta">Hosted session</div></div></div>' +
+      html = '<section class="profile-panel"><div class="profile-head"><div class="avatar">' + escapeHtml(initials(publicOwnerLabel())) + '</div><div><div class="profile-name">' + escapeHtml(publicOwnerLabel()) + '</div><div class="profile-meta">' + escapeHtml(agentSubLabel() === "hosted session" ? "Hosted session" : "Agent: " + agentSubLabel()) + '</div></div></div>' +
         trustStrip([
           ["session", "hosted active"],
           ["friends", friendContacts().length],
@@ -1017,7 +1026,8 @@ const READER_SCRIPT = `<script>
       state.me = me.identity;
       setText("owner", publicOwnerLabel() + " | Hosted session active");
       setText("ownerName", publicOwnerLabel());
-      setText("ownerShort", "hosted session");
+      setText("ownerShort", agentSubLabel());
+      setText("ownerAvatar", initials(publicOwnerLabel()));
       const sets = await Promise.all([
         api("/api/contacts"),
         api("/api/posts"),
