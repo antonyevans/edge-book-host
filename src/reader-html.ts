@@ -534,7 +534,11 @@ const READER_SCRIPT = `<script>
     messages: [],
     audit: [],
     shared: [],
-    invite: null
+    invite: null,
+    signals: {},
+    capabilities: {},
+    endorsements: {},
+    attestations: {}
   };
   const titleByView = {
     profile: "Profile", feed: "Feed", shared: "Shared with me", contacts: "Friends and contacts",
@@ -1038,12 +1042,20 @@ const READER_SCRIPT = `<script>
         // Contract-2 surfaces (ea-claude-066/067). Tolerant of older agents that
         // don't expose them yet — the views just stay empty.
         api("/api/shared-objects").catch(function () { return { objects: [] }; }),
-        api("/api/invite").catch(function () { return null; })
+        api("/api/invite").catch(function () { return null; }),
+        api("/api/signals").catch(function () { return { signals: {} }; }),
+        api("/api/capabilities").catch(function () { return { capabilities: {} }; }),
+        api("/api/endorsements").catch(function () { return { endorsements: {} }; }),
+        api("/api/attestations").catch(function () { return { attestations: {} }; })
       ]);
       const contacts = sets[0], posts = sets[1], feed = sets[2], approvals = sets[3], audit = sets[4];
       state.contacts = contacts.contacts;
       state.shared = (sets[5] && sets[5].objects) || [];
       state.invite = sets[6];
+      state.signals = (sets[7] && sets[7].signals) || {};
+      state.capabilities = (sets[8] && sets[8].capabilities) || {};
+      state.endorsements = (sets[9] && sets[9].endorsements) || {};
+      state.attestations = (sets[10] && sets[10].attestations) || {};
       state.mutes = contacts.mutes;
       state.posts = posts.posts;
       state.feedItems = feed.feed_items;
