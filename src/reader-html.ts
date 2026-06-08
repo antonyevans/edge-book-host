@@ -663,6 +663,21 @@ const READER_SCRIPT = `<script>
       (stale ? ' · stale' : "") + '</span></div></div></div>' +
       '<div class="item-body">' + escapeHtml(sig.body || "") + '</div></article>';
   }
+  var EPHEMERAL_LABELS = { query: "Query", share: "Share", coordinate: "Coordinate", delegation_request: "Delegation Request" };
+  var EPHEMERAL_TERMINAL = { expired: 1, cancelled: 1, tombstoned: 1 };
+  function renderEphemeralCard(post) {
+    var stale = post.lifecycle === "stale";
+    var label = EPHEMERAL_LABELS[post.post_type] || "Post";
+    var extra = "";
+    if (post.post_type === "share" && post.ref) extra = '<div class="eph-extra">↗ ' + escapeHtml(post.ref) + '</div>';
+    else if (post.post_type === "delegation_request" && post.subject_agent_id) extra = '<div class="eph-extra">to ' + escapeHtml(agentLabel(post.subject_agent_id)) + '</div>';
+    else if (post.post_type === "coordinate" && post.subject_agent_id) extra = '<div class="eph-extra">with ' + escapeHtml(agentLabel(post.subject_agent_id)) + '</div>';
+    return '<article class="item signal eph' + (stale ? " eph-stale" : "") + '" data-eph="' + escapeHtml(post.post_id) + '">' +
+      '<div class="item-head"><div class="item-title-row"><span class="avatar mini">' + escapeHtml(initials(agentLabel(post.from_agent))) + '</span>' +
+      '<div><h3>' + escapeHtml(label) + '</h3><span class="item-time">' + escapeHtml(agentLabel(post.from_agent)) + ' · ' + escapeHtml(timeLabel(post.created_at)) +
+      (stale ? ' · stale' : "") + '</span></div></div></div>' +
+      '<div class="item-body">' + escapeHtml(post.body || "") + '</div>' + extra + '</article>';
+  }
   function shortId(value) { const text = String(value || ""); return text.length > 18 ? text.slice(0, 18) + "..." : text; }
   function labelize(value) { return String(value || "n/a").replace(/_/g, " "); }
   function formatBytes(n) {
@@ -892,7 +907,13 @@ const READER_SCRIPT = `<script>
         initials(agentLabel(feed.origin_agent_id)))
         + renderEndorsementAnnotations("edgebook:post:" + feed.post_id);   // R5: annotations on the post
       }).join("");
-      html = (signalHtml + feedHtml) || renderFeedEmpty();
+      const ephemeralHtml = values(state.ephemeral)
+        .filter(function (p) { return !EPHEMERAL_TERMINAL[p.lifecycle]; })
+        .sort(function (a, b) { return Date.parse(b.created_at) - Date.parse(a.created_at); })
+        .map(function (p) {
+          return renderEphemeralCard(p) + (p.post_type === "query" ? renderAnswerAnnotations("edgebook:query:" + p.post_id) : "");
+        }).join("");
+      html = (signalHtml + ephemeralHtml + feedHtml) || renderFeedEmpty();
     }
     if (state.view === "shared") {
       // Each entry is a Contract-2 SharedObject the owner has been GRANTED to
