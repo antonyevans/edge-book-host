@@ -896,7 +896,8 @@ const READER_SCRIPT = `<script>
           ["signature", obj.signature ? "present" : "missing"]
         ];
         const attActions = att ? action("Open attachment", "shared-open-attachment", obj.object_id) : "";
-        return item(req.title || "Untitled request", req.body || "", facts, obj, "", attActions, trust, "Shared " + timeLabel(obj.created_at));
+        return item(req.title || "Untitled request", req.body || "", facts, obj, "", attActions, trust, "Shared " + timeLabel(obj.created_at))
+          + renderEndorsementAnnotations("edgebook:object:" + obj.object_id);   // R5: annotation on the parent object
       }).join("") || renderEmpty("Nothing has been shared with you yet. A shared object appears here only when a contact grants you access to it.");
     }
     if (state.view === "add") {
