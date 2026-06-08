@@ -686,7 +686,8 @@ const READER_SCRIPT = `<script>
     if (!agentId) return "Local owner";
     if (state.me && state.me.agent_id === agentId) return publicOwnerLabel();
     const contact = contactFor(agentId);
-    return contact.display_name || (contact.aliases && contact.aliases[0]) || shortId(agentId);
+    // Prefer the peer's human owner name when they shared it (opt-in on their side).
+    return contact.owner_label || contact.display_name || (contact.aliases && contact.aliases[0]) || shortId(agentId);
   }
   function peerEndpointLabel(contact) {
     const endpoints = contact.known_endpoints || [];
@@ -749,7 +750,7 @@ const READER_SCRIPT = `<script>
     var friendsList = document.getElementById("friendsList");
     if (friendsList) {
       friendsList.innerHTML = friends.slice(0, 6).map(function(c) {
-        var name = c.display_name || (c.aliases && c.aliases[0]) || shortId(c.peer_agent_id);
+        var name = c.owner_label || c.display_name || (c.aliases && c.aliases[0]) || shortId(c.peer_agent_id);
         var ini = initials(name);
         var sub = c.relationship_state ? labelize(c.relationship_state) : "";
         return '<div class="friend-row"><div class="avatar mini">' + escapeHtml(ini) + '</div><div><div class="friend-name">' + escapeHtml(name) + '</div>' + (sub ? '<div class="friend-sub">' + escapeHtml(sub) + '</div>' : '') + '</div></div>';
@@ -864,14 +865,14 @@ const READER_SCRIPT = `<script>
     }
     if (state.view === "contacts") {
       html = values(state.contacts).map(function (contact) {
-        return item(contact.display_name || "Unnamed contact", (contact.aliases && contact.aliases[0]) || contact.card_url || peerEndpointLabel(contact), [
+        return item(contact.owner_label || contact.display_name || "Unnamed contact", (contact.aliases && contact.aliases[0]) || contact.card_url || peerEndpointLabel(contact), [
           state.mutes[contact.peer_agent_id] ? "muted" : "active"
         ], contact, contact.relationship_state === "blocked" ? "risk" : "", state.mutes[contact.peer_agent_id] ? "" : action("Mute", "contact-mute", contact.peer_agent_id), [
           ["relationship", labelize(contact.relationship_state)],
           ["grants", (contact.capability_grants || []).length],
           ["endpoint", (contact.known_endpoints || []).length ? "known" : "missing"],
           ["local posture", state.mutes[contact.peer_agent_id] ? "muted" : "active"]
-        ], "", initials(contact.display_name || (contact.aliases && contact.aliases[0]) || contact.peer_agent_id));
+        ], "", initials(contact.owner_label || contact.display_name || (contact.aliases && contact.aliases[0]) || contact.peer_agent_id));
       }).join("") || renderEmpty("No contacts yet.");
     }
     if (state.view === "messages") {
