@@ -538,7 +538,9 @@ const READER_SCRIPT = `<script>
     signals: {},
     capabilities: {},
     endorsements: {},
-    attestations: {}
+    attestations: {},
+    ephemeral: {},
+    answers: {}
   };
   const titleByView = {
     profile: "Profile", feed: "Feed", shared: "Shared with me", contacts: "Friends and contacts",
@@ -1097,7 +1099,9 @@ const READER_SCRIPT = `<script>
         api("/api/signals").catch(function () { return { signals: {} }; }),
         api("/api/capabilities").catch(function () { return { capabilities: {} }; }),
         api("/api/endorsements").catch(function () { return { endorsements: {} }; }),
-        api("/api/attestations").catch(function () { return { attestations: {} }; })
+        api("/api/attestations").catch(function () { return { attestations: {} }; }),
+        api("/api/ephemeral").catch(function () { return { ephemeral: {} }; }),
+        api("/api/answers").catch(function () { return { answers: {} }; })
       ]);
       const contacts = sets[0], posts = sets[1], feed = sets[2], approvals = sets[3], audit = sets[4];
       state.contacts = contacts.contacts;
@@ -1107,6 +1111,8 @@ const READER_SCRIPT = `<script>
       state.capabilities = (sets[8] && sets[8].capabilities) || {};
       state.endorsements = (sets[9] && sets[9].endorsements) || {};
       state.attestations = (sets[10] && sets[10].attestations) || {};
+      state.ephemeral = (sets[11] && sets[11].ephemeral) || {};
+      state.answers = (sets[12] && sets[12].answers) || {};
       state.mutes = contacts.mutes;
       state.posts = posts.posts;
       state.feedItems = feed.feed_items;
