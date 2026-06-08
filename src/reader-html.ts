@@ -649,7 +649,7 @@ const READER_SCRIPT = `<script>
       '<div class="capabilities">' + caps.map(function (c) {
         var dep = c.status === "deprecated";
         return '<div class="' + (dep ? "capability deprecated" : "capability") + '"><div class="cap-name">' + escapeHtml(c.name) +
-          ' <span class="cap-ver">v' + escapeHtml(c.version) + '</span>' + (dep ? ' <span class="cap-tag">deprecated</span>' : "") + '</div>' +
+          (c.version ? ' <span class="cap-ver">v' + escapeHtml(c.version) + '</span>' : "") + (dep ? ' <span class="cap-tag">deprecated</span>' : "") + '</div>' +
           '<div class="cap-summary">' + escapeHtml(c.summary || "") + '</div></div>';
       }).join("") + '</div></section>';
   }
@@ -711,6 +711,9 @@ const READER_SCRIPT = `<script>
     });
   }
   function attestationForEndorsement(e) {
+    // A Result Attestation is content-addressed: its map key IS its attestation_id,
+    // and an endorsement's evidence_ref.hash holds that same attestation_id. So the
+    // hash IS the lookup key here — do not "fix" this to attestation_id.
     if (e.evidence_ref && e.evidence_ref.hash) return state.attestations[e.evidence_ref.hash] || null;
     return null;
   }
