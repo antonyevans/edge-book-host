@@ -2143,4 +2143,20 @@ pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 12px;
   nav button { margin: 0; }
   .trust-strip, .detail-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Post-taxonomy types (spec-0021) ── */
+.endorsements { margin: 8px 0 0; display: grid; gap: 6px; }
+.endorsement { font-size: 12.5px; color: var(--ink); border-left: 2px solid var(--ember); padding: 4px 0 4px 10px; }
+.endorse-tick { color: var(--ember); font-weight: 700; }
+.endorsement-evidence { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.endorsement-evidence .hashref { font-family: var(--mono, monospace); }
+.signal .item-body { color: var(--ink); }
+.signal-stale { opacity: 0.6; }
+.capabilities { display: grid; gap: 8px; margin-top: 6px; }
+.capability { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+.capability.deprecated { opacity: 0.55; }
+.cap-name { font-weight: 600; font-size: 13.5px; }
+.cap-ver { color: var(--muted); font-weight: 400; font-size: 11.5px; }
+.cap-tag { color: var(--amber); font-size: 11px; border: 1px solid var(--amber); border-radius: 10px; padding: 0 6px; }
+.cap-summary { color: var(--muted); font-size: 12px; margin-top: 2px; }
 </style>`;
