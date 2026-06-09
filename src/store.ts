@@ -195,7 +195,7 @@ export class HostStore {
   }
 
   resolveHandle(handle: string): HandleRecord | null {
-    return this.state.handles[handle] ?? null;
+    return Object.hasOwn(this.state.handles, handle) ? this.state.handles[handle] ?? null : null;
   }
 
   // --- pairing codes ---

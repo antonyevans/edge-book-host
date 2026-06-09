@@ -119,6 +119,10 @@ test("GET /handle/:handle returns the card, 404 for unknown", async () => {
   assert.equal(((await ok.json()) as { agent_id: string }).agent_id, "did:openclaw:abc");
   const miss = await fetch(`${baseUrl}/handle/nobody`);
   assert.equal(miss.status, 404);
+  // Prototype-key keys must not resolve to an inherited Object.prototype member —
+  // own-property check in resolveHandle keeps this a clean 404, not a malformed 200.
+  const proto = await fetch(`${baseUrl}/handle/__proto__`);
+  assert.equal(proto.status, 404);
 });
 
 // Minimal WS client that completes the hello handshake then captures
@@ -189,4 +193,17 @@ test("handle_claim frame: genuine claim → ok and stored; bad slug → bad_form
   });
   assert.equal(tampered.type, "handle_claim_err");
   assert.equal(tampered.reason, "bad_sig");
+
+  // Corrupted binding: card.agent_id no longer matches the DID derived from its
+  // own pubkey, so verifyHandleClaim → bad_card. The claim_sig is genuine (signed
+  // by the real key over the corrupted agent_did), proving we hit the card check.
+  const id3 = mkIdentity();
+  const handle3 = "ws-claim-three";
+  const card3 = { ...mkCard(id3, handle3), agent_id: "did:openclaw:not-derived" };
+  const claim_sig3 = sign({ handle: handle3, agent_did: card3.agent_id, claimed_at }, id3.priv);
+  const badCard = await claimViaWs(wsUrl, {
+    type: "handle_claim", request_id: "c4", handle: handle3, card: card3, claimed_at, claim_sig: claim_sig3,
+  });
+  assert.equal(badCard.type, "handle_claim_err");
+  assert.equal(badCard.reason, "bad_card");
 });
