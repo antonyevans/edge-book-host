@@ -47,6 +47,19 @@ primary_region = 'sjc'
     timeout = '2s'
     grace_period = '10s'
 
+  # HTTP healthcheck on /healthz (ea-claude-084). A tcp_check passes whenever the
+  # port is open — even if the app has wedged. This actually exercises the app so
+  # fly restarts a wedged-but-listening machine automatically, which is the real
+  # resilience win for a stateful single-machine host (a volume-bound mailbox
+  # singleton can't safely run 2 machines — that needs externalized state).
+  [[services.http_checks]]
+    interval = '15s'
+    timeout = '3s'
+    grace_period = '20s'
+    method = 'get'
+    path = '/healthz'
+    protocol = 'http'
+
 [[vm]]
   cpu_kind = 'shared'
   cpus = 1
