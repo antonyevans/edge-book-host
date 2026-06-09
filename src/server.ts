@@ -407,6 +407,15 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { authenticated: !!probe });
       return;
     }
+    // Public handle resolution (spec-096): returns the stored signed agent card
+    // for a claimed handle, or 404. No session — handles are meant to be public.
+    if (req.method === "GET" && url.pathname.startsWith("/handle/")) {
+      const handle = decodeURIComponent(url.pathname.slice("/handle/".length));
+      const rec = store.resolveHandle(handle);
+      if (!rec) { sendJson(res, 404, { ok: false, error: "not_found" }); return; }
+      sendJson(res, 200, rec.card);
+      return;
+    }
     if (url.pathname === "/pair") {
       await handlePair(req, res, url);
       return;

@@ -125,6 +125,21 @@ export interface MailboxAckFrame {
   id: string;
 }
 
+// ── Handle registry frames (spec-096) ───────────────────────────────────────
+//   Agent → Host   { type:"handle_claim", request_id, handle, card, claimed_at, claim_sig }
+//   Host → Agent   { type:"handle_claim_ok",  request_id, handle }
+//                  { type:"handle_claim_err", request_id, reason }
+export interface HandleClaimFrame {
+  type: "handle_claim";
+  request_id: string;
+  handle: string;
+  card: unknown;
+  claimed_at: number;
+  claim_sig: string;
+}
+export interface HandleClaimOkFrame { type: "handle_claim_ok"; request_id: string; handle: string; }
+export interface HandleClaimErrFrame { type: "handle_claim_err"; request_id: string; reason: "taken" | "bad_sig" | "bad_format" | "bad_card"; }
+
 // ───────────────────────────────────────────────────────────────────────────
 // Contract 2 — Object + grant + audit  (lead: openclaw; ea-claude-066)
 // ───────────────────────────────────────────────────────────────────────────
