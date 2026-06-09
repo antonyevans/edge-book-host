@@ -54,6 +54,14 @@ export interface StoredMailboxMessage extends MailboxMessage {
   expires_at: number;
 }
 
+export interface HandleRecord {
+  handle: string;
+  agent_did: string;
+  card: unknown;          // the full signed AgentCard (opaque to the host)
+  claimed_at: number;
+  claim_sig: string;
+}
+
 interface State {
   pairing_codes: Record<string, PairingCode>;
   sessions: Record<string, Session>;
@@ -61,6 +69,8 @@ interface State {
   channels: Record<string, ChannelMeta>;
   // Store-and-forward queue keyed by host-assigned message id. Survives restart.
   mailbox: Record<string, StoredMailboxMessage>;
+  // Handle registry keyed by slug (spec-096). Survives restart.
+  handles: Record<string, HandleRecord>;
 }
 
 const EMPTY: State = {
@@ -68,7 +78,8 @@ const EMPTY: State = {
   sessions: {},
   device_tokens: {},
   channels: {},
-  mailbox: {}
+  mailbox: {},
+  handles: {}
 };
 
 export class HostStore {
@@ -92,7 +103,8 @@ export class HostStore {
         sessions: parsed.sessions || {},
         device_tokens: parsed.device_tokens || {},
         channels: parsed.channels || {},
-        mailbox: parsed.mailbox || {}
+        mailbox: parsed.mailbox || {},
+        handles: parsed.handles || {}
       };
     } catch {
       return structuredClone(EMPTY);
@@ -170,6 +182,20 @@ export class HostStore {
   // For tests / inspection.
   mailboxCount(): number {
     return Object.keys(this.state.mailbox).length;
+  }
+
+  // --- handle registry (spec-096) ---
+  // Grant iff free OR already owned by the same DID (idempotent card refresh).
+  claimHandle(rec: Omit<HandleRecord, "claimed_at"> & { claimed_at?: number }): "ok" | "taken" {
+    const existing = this.state.handles[rec.handle];
+    if (existing && existing.agent_did !== rec.agent_did) return "taken";
+    this.state.handles[rec.handle] = { ...rec, claimed_at: rec.claimed_at ?? Date.now() };
+    this.scheduleFlush();
+    return "ok";
+  }
+
+  resolveHandle(handle: string): HandleRecord | null {
+    return this.state.handles[handle] ?? null;
   }
 
   // --- pairing codes ---

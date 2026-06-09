@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { isValidSlug, didFromPem, verifyHandleClaim, canonicalizeHost } from "../src/handles.ts";
+import { HostStore } from "../src/store.ts";
 
 function mkIdentity() {
   const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
@@ -62,4 +66,25 @@ test("verifyHandleClaim rejects a card with a corrupted self-signature", () => {
   const claimed_at = 1700000000000;
   const claim_sig = sign({ handle: "antony-evans", agent_did: id.did, claimed_at }, id.priv);
   assert.equal(verifyHandleClaim(card, "antony-evans", claimed_at, claim_sig), "bad_card");
+});
+
+function tmpStore(): HostStore {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "eb-store-"));
+  return new HostStore(dir);
+}
+const REC = { handle: "antony-evans", agent_did: "did:openclaw:abc", card: { agent_id: "did:openclaw:abc" }, claim_sig: "s" };
+
+test("claimHandle stores then resolves", () => {
+  const s = tmpStore();
+  assert.equal(s.claimHandle(REC), "ok");
+  assert.equal(s.resolveHandle("antony-evans")?.agent_did, "did:openclaw:abc");
+  assert.equal(s.resolveHandle("nope"), null);
+});
+
+test("claimHandle is idempotent for the same DID, taken for a different DID", () => {
+  const s = tmpStore();
+  assert.equal(s.claimHandle(REC), "ok");
+  assert.equal(s.claimHandle({ ...REC, claim_sig: "s2" }), "ok");
+  assert.equal(s.claimHandle({ ...REC, agent_did: "did:openclaw:other" }), "taken");
+  assert.equal(s.resolveHandle("antony-evans")?.agent_did, "did:openclaw:abc");
 });
