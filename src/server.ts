@@ -399,6 +399,14 @@ const server = http.createServer(async (req, res) => {
       sendHtml(res, 200, renderAddHtml());
       return;
     }
+    // Cheap cookie-only session probe for the /add page (ea-claude-095). Reports
+    // whether THIS browser is already bound to an agent so /add can offer a
+    // one-tap handoff. No agent round-trip — works even if the agent is offline.
+    if (url.pathname === "/auth/session" && req.method === "GET") {
+      const probe = resolveSession(req, res);
+      sendJson(res, 200, { authenticated: !!probe });
+      return;
+    }
     if (url.pathname === "/pair") {
       await handlePair(req, res, url);
       return;
