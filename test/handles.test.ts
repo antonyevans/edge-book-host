@@ -54,3 +54,12 @@ test("verifyHandleClaim rejects a card whose agent_id != derived DID", () => {
   const claim_sig = sign({ handle: "antony-evans", agent_did: card.agent_id, claimed_at }, id.priv);
   assert.equal(verifyHandleClaim(card as never, "antony-evans", claimed_at, claim_sig), "bad_card");
 });
+
+test("verifyHandleClaim rejects a card with a corrupted self-signature", () => {
+  const id = mkIdentity();
+  const card = mkCard(id, "antony-evans");
+  card.signature = card.signature.slice(0, -4) + "AAAA"; // corrupt the card's own signature
+  const claimed_at = 1700000000000;
+  const claim_sig = sign({ handle: "antony-evans", agent_did: id.did, claimed_at }, id.priv);
+  assert.equal(verifyHandleClaim(card, "antony-evans", claimed_at, claim_sig), "bad_card");
+});
