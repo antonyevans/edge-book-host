@@ -61,10 +61,39 @@ interface Channel {
   pending: Map<string, PendingRequest>;
 }
 
+export interface ChannelMetrics {
+  connected_channels: number;
+  mailbox_queue_depth: number;
+  deliveries: {
+    enqueued: number;
+    delivered: number;
+    acked: number;
+    errors: number;
+  };
+}
+
 export class ChannelRegistry {
   private channels = new Map<string, Channel>();
+  private counters = { enqueued: 0, delivered: 0, acked: 0, errors: 0 };
 
   constructor(private store: HostStore) {}
+
+  liveChannelCount(): number {
+    let count = 0;
+    for (const channel of this.channels.values()) {
+      const hasOpen = channel.connections.some((c) => c.ws.readyState === c.ws.OPEN);
+      if (hasOpen) count++;
+    }
+    return count;
+  }
+
+  metrics(): ChannelMetrics {
+    return {
+      connected_channels: this.liveChannelCount(),
+      mailbox_queue_depth: this.store.mailboxCount(),
+      deliveries: { ...this.counters },
+    };
+  }
 
   // A channel is "available" only if it has at least one OPEN connection.
   has(channel_id: string): boolean {
@@ -271,6 +300,7 @@ export class ChannelRegistry {
       const msg = { id, to, from: channel.channel_id, blob: blob_b64, ts: Date.now() };
       this.store.enqueueMailbox(msg, MAILBOX_TTL_MS);
       logEvent("mailbox_enqueue", { id, to: cref(to), from: cref(channel.channel_id) });
+      this.counters.enqueued++;
       this.send(ws, { type: "mailbox_send_ok", request_id, id });
       // Best-effort immediate delivery if the recipient is online. At-least-once
       // either way: the message stays queued until the recipient acks.
@@ -287,10 +317,14 @@ export class ChannelRegistry {
       const recipient = this.store.peekMailboxRecipient(id);
       if (recipient && recipient !== channel.channel_id && recipient !== channel.agent_did) {
         logEvent("mailbox_ack_reject", { id, by: cref(channel.channel_id) });
+        this.counters.errors++;
         return;
       }
       const deleted = this.store.ackMailbox(id);
-      if (deleted) logEvent("mailbox_ack", { id, to: cref(deleted) });
+      if (deleted) {
+        logEvent("mailbox_ack", { id, to: cref(deleted) });
+        this.counters.acked++;
+      }
       return;
     }
     // Unknown — echo back on the originating socket.
@@ -343,7 +377,10 @@ export class ChannelRegistry {
       this.send(primary.ws, { type: "mailbox_deliver", id: m.id, from: m.from, blob_b64: m.blob, ts: m.ts });
       sent++;
     }
-    if (sent) logEvent("mailbox_deliver", { channel: cref(channel.channel_id), count: sent });
+    if (sent) {
+      logEvent("mailbox_deliver", { channel: cref(channel.channel_id), count: sent });
+      this.counters.delivered += sent;
+    }
     return sent;
   }
 
