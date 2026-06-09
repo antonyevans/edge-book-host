@@ -68,13 +68,13 @@ export interface ChannelMetrics {
     enqueued: number;
     delivered: number;
     acked: number;
-    errors: number;
+    ack_rejects: number;
   };
 }
 
 export class ChannelRegistry {
   private channels = new Map<string, Channel>();
-  private counters = { enqueued: 0, delivered: 0, acked: 0, errors: 0 };
+  private counters = { enqueued: 0, delivered: 0, acked: 0, ack_rejects: 0 };
 
   constructor(private store: HostStore) {}
 
@@ -317,7 +317,7 @@ export class ChannelRegistry {
       const recipient = this.store.peekMailboxRecipient(id);
       if (recipient && recipient !== channel.channel_id && recipient !== channel.agent_did) {
         logEvent("mailbox_ack_reject", { id, by: cref(channel.channel_id) });
-        this.counters.errors++;
+        this.counters.ack_rejects++;
         return;
       }
       const deleted = this.store.ackMailbox(id);

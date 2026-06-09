@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { HostStore } from "../src/store.js";
 import { ChannelRegistry } from "../src/channels.js";
-import { startServer, store } from "./helpers.js";
+import { startServer, store, channels } from "./helpers.js";
 
 // ── Task 1: ChannelRegistry unit tests — counters + liveChannelCount ─────────
 
@@ -26,7 +26,7 @@ test("metrics() counters are all 0 on a fresh registry", () => {
   assert.equal(m.deliveries.enqueued, 0);
   assert.equal(m.deliveries.delivered, 0);
   assert.equal(m.deliveries.acked, 0);
-  assert.equal(m.deliveries.errors, 0);
+  assert.equal(m.deliveries.ack_rejects, 0);
 });
 
 // ── Task 1: enqueue counter increments via the real mailbox_send path ─────────
@@ -70,9 +70,9 @@ test("enqueued counter increments after mailbox_send; store.mailboxCount() refle
   const a = await connectAgent(wsUrl, KEY_OBS_A);
   const b = await connectAgent(wsUrl, KEY_OBS_B);
 
-  // Record enqueued baseline from the shared channels registry.
-  // (The shared channels instance is what the server uses.)
+  // Record baselines from the shared channels registry.
   const beforeCount = store.mailboxCount();
+  const beforeEnqueued = channels.metrics().deliveries.enqueued;
 
   // Send a mailbox message from A → B's channel_id.
   // This exercises the exact mailbox_send path that should increment enqueued.
@@ -87,6 +87,60 @@ test("enqueued counter increments after mailbox_send; store.mailboxCount() refle
   });
   assert.ok(sendOk, "host assigned a message id");
   assert.equal(store.mailboxCount(), beforeCount + 1, "mailboxCount reflects enqueued message");
+  assert.equal(channels.metrics().deliveries.enqueued, beforeEnqueued + 1, "enqueued counter incremented");
+
+  a.close(); b.close();
+});
+
+test("delivered counter increments on online delivery; acked counter increments on ack; ack is idempotent", async () => {
+  const { wsUrl } = await startServer();
+
+  // Use unique keys to avoid counter contamination from other tests.
+  const KEY_D1 = "ed25519:obs-delivered-1-" + Math.random().toString(36).slice(2);
+  const KEY_D2 = "ed25519:obs-delivered-2-" + Math.random().toString(36).slice(2);
+
+  const beforeDelivered = channels.metrics().deliveries.delivered;
+  const beforeAcked = channels.metrics().deliveries.acked;
+
+  // B connects first so it is online and gets immediate delivery.
+  const b = await connectAgent(wsUrl, KEY_D1);
+  const a = await connectAgent(wsUrl, KEY_D2);
+
+  // Collect mailbox_deliver frames on B.
+  const bDelivers: string[] = [];
+  b.ws.on("message", (raw) => {
+    const f = JSON.parse(raw.toString()) as Record<string, unknown>;
+    if (f.type === "mailbox_deliver") bDelivers.push(String(f.id));
+  });
+
+  // A sends to B (B is online → immediate delivery).
+  const msgId = await new Promise<string>((resolve, reject) => {
+    const rid = "obs-d-r1";
+    a.ws.on("message", (raw) => {
+      const f = JSON.parse(raw.toString()) as Record<string, unknown>;
+      if (f.type === "mailbox_send_ok" && f.request_id === rid) resolve(String(f.id));
+      else if (f.type === "mailbox_send_err" && f.request_id === rid) reject(new Error(String(f.error)));
+    });
+    a.ws.send(JSON.stringify({ type: "mailbox_send", request_id: rid, to: b.channel_id, blob_b64: b64("hi-delivered") }));
+  });
+
+  // Wait for B to actually receive the delivery frame.
+  const deadline = Date.now() + 2000;
+  while (bDelivers.length === 0 && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  assert.ok(bDelivers.includes(msgId), "B received the mailbox_deliver frame");
+  assert.equal(channels.metrics().deliveries.delivered, beforeDelivered + 1, "delivered counter incremented after online delivery");
+
+  // B acks once → acked increments.
+  b.ws.send(JSON.stringify({ type: "mailbox_ack", id: msgId }));
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(channels.metrics().deliveries.acked, beforeAcked + 1, "acked counter incremented after first ack");
+
+  // B acks the SAME id again → acked must NOT increment again (idempotent-ack guard).
+  b.ws.send(JSON.stringify({ type: "mailbox_ack", id: msgId }));
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(channels.metrics().deliveries.acked, beforeAcked + 1, "acked counter stays at 1 after duplicate ack (idempotent)");
 
   a.close(); b.close();
 });
@@ -106,7 +160,7 @@ test("GET /metrics returns 200 JSON with expected shape (no auth required)", asy
   assert.equal(typeof d.enqueued, "number");
   assert.equal(typeof d.delivered, "number");
   assert.equal(typeof d.acked, "number");
-  assert.equal(typeof d.errors, "number");
+  assert.equal(typeof d.ack_rejects, "number");
   assert.equal(typeof body.uptime_s, "number");
 });
 
