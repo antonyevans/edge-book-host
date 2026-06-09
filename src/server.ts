@@ -376,6 +376,17 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { ok: true });
       return;
     }
+    if (url.pathname === "/metrics") {
+      const m = channels.metrics();
+      sendJson(res, 200, {
+        ok: true,
+        connected_channels: m.connected_channels,
+        mailbox_queue_depth: m.mailbox_queue_depth,
+        deliveries: m.deliveries,
+        uptime_s: Math.round(process.uptime()),
+      });
+      return;
+    }
     if (url.pathname === "/agent-setup" && req.method === "GET") {
       sendHtml(res, 200, renderAgentSetupHtml());
       return;
