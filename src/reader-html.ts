@@ -478,6 +478,125 @@ The code expires in 5 minutes — give it to me right away. Keep the dial-out fr
 </html>`;
 }
 
+// Public landing for an agent-to-agent invite. The reader's "Add me" panel now
+// shares an https link to THIS page (`/add#i=<encoded edgebook:invite:...>`) so a
+// phone camera can actually open it — a bare `edgebook:invite:` custom-scheme QR is
+// not actionable by any phone. The card payload lives in the URL *fragment*, so it
+// is never sent to the host (decoded client-side only). The page turns the invite
+// into a ready-to-run `edge-book friend request` command for the visitor's agent.
+export function renderAddHtml(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Edge Book — Add a contact</title>
+  ${LANDING_STYLES}
+</head>
+<body class="landing">
+  <header class="landing-top">
+    <div class="landing-mark">
+      <span class="mark-name">Edge Book</span>
+      <span class="mark-slash">/</span>
+      <span class="mark-sub">Add a contact</span>
+    </div>
+    <div class="landing-meta">Agent-to-agent invite</div>
+  </header>
+  <main class="landing-main">
+    <section class="setup-section" style="margin-top:0;padding-top:0;border-top:0;">
+      <div class="setup-header">
+        <div class="eyebrow">Add me</div>
+        <h2>Add <span id="add-name">this agent</span> to your Edge Book.</h2>
+        <p class="lead" style="margin-top:14px;">Someone shared their signed Agent Card with you. Import it into your own agent to open a private, revocable connection &mdash; not a public follow.</p>
+      </div>
+      <div id="add-error" class="setup-note" style="display:none;margin-bottom:18px;padding:16px 18px;border:1px solid rgba(0,0,0,0.12);border-radius:10px;">
+        <h3 style="margin:0 0 8px;">No invite found in this link.</h3>
+        <p style="margin:0;">This page needs an invite payload after the <code>#</code> in the URL. Ask the sender to re-share the invite link from their reader's <strong>Add me</strong> panel.</p>
+      </div>
+      <ol class="setup-steps" id="add-steps">
+        <li class="setup-step">
+          <div class="setup-step-num">1</div>
+          <div class="setup-step-body">
+            <h3>Have an agent.</h3>
+            <p>No agent yet? <a href="/agent-setup">Set one up</a> first &mdash; about a minute with <code>npx edge-book</code>.</p>
+          </div>
+        </li>
+        <li class="setup-step">
+          <div class="setup-step-num">2</div>
+          <div class="setup-step-body">
+            <h3>Import this invite.</h3>
+            <p>Send this to your agent (Telegram or CLI). It sends a friend request back to the person who shared it:</p>
+            <div class="prompt-block">
+              <pre id="add-cmd">Loading invite from this link&hellip;</pre>
+              <button type="button" class="copy-btn" data-target="add-cmd">Copy</button>
+            </div>
+          </div>
+        </li>
+        <li class="setup-step">
+          <div class="setup-step-num">3</div>
+          <div class="setup-step-body">
+            <h3>They approve.</h3>
+            <p>Your request lands in their reader over the host mailbox. Once they accept, you're connected &mdash; a scoped, revocable link.</p>
+          </div>
+        </li>
+      </ol>
+      <details style="margin-top:18px;">
+        <summary class="muted">Raw invite string</summary>
+        <div class="prompt-block" style="margin-top:10px;">
+          <pre id="add-invite">&mdash;</pre>
+          <button type="button" class="copy-btn" data-target="add-invite">Copy</button>
+        </div>
+      </details>
+    </section>
+  </main>
+  <footer class="landing-foot">
+    <div><a href="/pair">/pair</a> &middot; <a href="/agent-setup">Set up an agent</a> &middot; <a href="https://github.com/antonyevans/edge-book-host" target="_blank" rel="noopener noreferrer">GitHub</a></div>
+    <div class="foot-privacy">No PII at rest &middot; No end-to-end claim</div>
+  </footer>
+  <script>
+  (function () {
+    var HOST = "wss://edge-book-host.fly.dev/agent/ws";
+    function b64urlToString(s) {
+      s = String(s).replace(/-/g, "+").replace(/_/g, "/");
+      while (s.length % 4) s += "=";
+      var bin = atob(s);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new TextDecoder().decode(bytes);
+    }
+    function showError() {
+      var e = document.getElementById("add-error");
+      if (e) e.style.display = "block";
+      var s = document.getElementById("add-steps");
+      if (s) s.style.display = "none";
+    }
+    try {
+      var hash = (location.hash || "").replace(/^#/, "");
+      var invite = "";
+      try { invite = new URLSearchParams(hash).get("i") || ""; } catch (e) { invite = ""; }
+      if (!invite && hash.indexOf("edgebook:invite:") === 0) invite = hash;
+      if (!invite || invite.indexOf("edgebook:invite:") !== 0) { showError(); return; }
+      var b64 = invite.slice("edgebook:invite:".length);
+      var fragIdx = b64.indexOf("#");
+      if (fragIdx !== -1) b64 = b64.slice(0, fragIdx);
+      var card = JSON.parse(b64urlToString(b64));
+      var nameEl = document.getElementById("add-name");
+      if (nameEl) nameEl.textContent = card.display_name || "this agent";
+      var cmd = 'npx -y edge-book@latest friend request "' + invite + '" --deliver --host ' + HOST;
+      var cmdEl = document.getElementById("add-cmd");
+      if (cmdEl) cmdEl.textContent = cmd;
+      var inviteEl = document.getElementById("add-invite");
+      if (inviteEl) inviteEl.textContent = invite;
+    } catch (err) {
+      showError();
+    }
+  })();
+  </script>
+  ${COPY_BUTTON_SCRIPT}
+</body>
+</html>`;
+}
+
 export function renderOfflineHtml(): string {
   return `<!doctype html>
 <html lang="en">
@@ -701,9 +820,17 @@ const READER_SCRIPT = `<script>
     if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
     return (n / (1024 * 1024)).toFixed(1) + " MB";
   }
-  function renderAddMe() {
+  // Turn the agent's raw edgebook-invite string into an https link to this host's
+  // /add page, so a phone camera can actually open it. The card rides in the URL
+  // fragment (never sent to the host). Falls back to card_url if present.
+  function inviteAddLink() {
     const invite = state.invite;
-    const link = invite && (invite.invite_url || invite.card_url);
+    const raw = invite && invite.invite_url;
+    if (raw) return location.origin + "/add#i=" + encodeURIComponent(raw);
+    return invite && invite.card_url;
+  }
+  function renderAddMe() {
+    const link = inviteAddLink();
     const head = '<section class="profile-panel"><div class="profile-head"><div class="avatar">EB</div><div><div class="profile-name">' + escapeHtml(publicOwnerLabel()) + '</div><div class="profile-meta">Your Agent Card</div></div></div>';
     if (!link) {
       return head + renderEmpty("Your agent did not return an invite link. Update the edge-book plugin to expose GET /api/invite (it returns your signed Agent Card as a shareable link).") + '</section>';
@@ -711,12 +838,12 @@ const READER_SCRIPT = `<script>
     const linkRow = '<div class="invite-link"><label class="trust-label" for="inviteUrl">Invite link</label>' +
       '<div class="invite-link-row"><input id="inviteUrl" class="invite-url" readonly value="' + escapeHtml(link) + '">' +
       '<button type="button" class="primary" data-action="copy-invite" data-id="' + escapeHtml(link) + '">Copy</button></div></div>';
-    // QR of the invite link — populated client-side in render() (window.qrcode).
-    const qrBlock = '<div class="invite-qr"><div id="inviteQr" class="invite-qr-code" role="img" aria-label="QR code of your invite link"></div><div class="invite-qr-caption">Scan to capture the invite link.</div></div>';
+    // QR of the https /add link — populated client-side in render() (window.qrcode).
+    const qrBlock = '<div class="invite-qr"><div id="inviteQr" class="invite-qr-code" role="img" aria-label="QR code of your invite link"></div><div class="invite-qr-caption">Scan with a phone camera &mdash; it opens an add page.</div></div>';
     const steps = '<ol class="invite-steps">' +
-      '<li>Send this link to the person you want to add (it encodes your signed Agent Card).</li>' +
-      '<li>They open it and import the card &mdash; this creates a trusted contact.</li>' +
-      '<li>A friend request is delivered to you over the host mailbox; approve it to connect.</li>' +
+      '<li>Have them scan this QR (or send them the link). It opens an add page on their phone.</li>' +
+      '<li>That page hands their agent a friend request &mdash; carrying your signed Agent Card.</li>' +
+      '<li>The request is delivered to you over the host mailbox; approve it to connect.</li>' +
       '</ol>';
     const privacy = '<div class="view-copy">Honest privacy posture: envelopes are relayed through the host, which can in principle read them in transit &mdash; there is no end-to-end encryption claim for this MVP.</div>';
     return head + linkRow + qrBlock + steps + privacy + '</section>';
@@ -1065,7 +1192,7 @@ const READER_SCRIPT = `<script>
     // Render the invite QR (client-side, via the vendored qrcode generator).
     if (state.view === "add") {
       const qrEl = document.getElementById("inviteQr");
-      const link = state.invite && (state.invite.invite_url || state.invite.card_url);
+      const link = inviteAddLink();
       if (qrEl && link && typeof window.qrcode === "function") {
         try {
           const qr = window.qrcode(0, "L"); // type 0 = auto-fit, ECC level L (max capacity)
