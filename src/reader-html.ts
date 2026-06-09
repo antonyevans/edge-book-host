@@ -509,6 +509,10 @@ export function renderAddHtml(): string {
         <h2>Add <span id="add-name">this agent</span> to your Edge Book.</h2>
         <p class="lead" style="margin-top:14px;">Someone shared their signed Agent Card with you. Import it into your own agent to open a private, revocable connection &mdash; not a public follow.</p>
       </div>
+      <div id="add-cta" style="display:none;margin:0 0 22px;">
+        <a id="add-now" class="pair-submit" style="display:inline-block;text-decoration:none;">Add to my agent</a>
+        <p class="muted" style="margin-top:8px;">You're signed in on this device &mdash; one tap connects you. Or follow the manual steps below.</p>
+      </div>
       <div id="add-error" class="setup-note" style="display:none;margin-bottom:18px;padding:16px 18px;border:1px solid rgba(0,0,0,0.12);border-radius:10px;">
         <h3 style="margin:0 0 8px;">No invite found in this link.</h3>
         <p style="margin:0;">This page needs an invite payload after the <code>#</code> in the URL. Ask the sender to re-share the invite link from their reader's <strong>Add me</strong> panel.</p>
@@ -587,6 +591,19 @@ export function renderAddHtml(): string {
       if (cmdEl) cmdEl.textContent = cmd;
       var inviteEl = document.getElementById("add-invite");
       if (inviteEl) inviteEl.textContent = invite;
+      // One-tap handoff: if this browser is already bound to an agent, surface a
+      // CTA that hands the invite to the authenticated reader (which holds CSRF).
+      var addNow = document.getElementById("add-now");
+      if (addNow) addNow.setAttribute("href", "/?add=" + encodeURIComponent(invite));
+      fetch("/auth/session", { headers: { "accept": "application/json" } })
+        .then(function (r) { return r.json(); })
+        .then(function (s) {
+          if (s && s.authenticated) {
+            var cta = document.getElementById("add-cta");
+            if (cta) cta.style.display = "block";
+          }
+        })
+        .catch(function () {});
     } catch (err) {
       showError();
     }
@@ -1359,10 +1376,37 @@ const READER_SCRIPT = `<script>
     // manual reload. Also keeps the dial-out channel marked active (idle timer).
     setInterval(function () { refresh().catch(function () {}); }, 15000);
   }
+  // One-tap Add (ea-claude-095): the /add page hands an invite to this signed-in
+  // reader via ?add=<invite>. Confirm, then POST it to the agent (which issues +
+  // relays the friend request). Strip the param so a reload does not re-prompt.
+  async function maybeHandleAddParam() {
+    var invite = "";
+    try { invite = new URLSearchParams(location.search).get("add") || ""; } catch (e) { invite = ""; }
+    if (!invite || invite.indexOf("edgebook:invite:") !== 0) return;
+    try { history.replaceState(null, "", location.pathname); } catch (e) {}
+    var name = "this agent";
+    try {
+      var b64 = invite.slice("edgebook:invite:".length).split("#")[0].replace(/-/g, "+").replace(/_/g, "/");
+      while (b64.length % 4) b64 += "=";
+      var bin = atob(b64);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      name = JSON.parse(new TextDecoder().decode(bytes)).display_name || name;
+    } catch (e) {}
+    if (!window.confirm("Add " + name + " to your Edge Book? A friend request will be sent.")) return;
+    try {
+      var r = await postJson("/api/friend/request", { invite: invite });
+      setText("sessionBadge", (r && r.status === "friend") ? "Already connected to " + name : "Friend request sent to " + name);
+      state.view = "contacts";
+      await refresh();
+    } catch (err) {
+      setText("sessionBadge", "Could not add: " + ((err && err.message) || String(err)));
+    }
+  }
   (async function boot() {
     document.getElementById("content").innerHTML = skeleton();
     for (var attempt = 1; ; attempt++) {
-      try { await refresh(); startPolling(); return; }
+      try { await refresh(); startPolling(); await maybeHandleAddParam(); return; }
       catch (err) {
         var offline = err && err.message === "agent_offline";
         if (attempt < 6) {
