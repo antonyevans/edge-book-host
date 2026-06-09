@@ -6,7 +6,7 @@ import { HostStore } from "./store.js";
 import { ChannelRegistry } from "./channels.js";
 import { normalizePairingCode, randomToken } from "./tokens.js";
 import { RateLimiter } from "./rate-limit.js";
-import { renderAgentSetupHtml, renderOfflineHtml, renderPairHtml, renderReaderHtml } from "./reader-html.js";
+import { renderAddHtml, renderAgentSetupHtml, renderOfflineHtml, renderPairHtml, renderReaderHtml } from "./reader-html.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -390,6 +390,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === "/agent-setup" && req.method === "GET") {
       sendHtml(res, 200, renderAgentSetupHtml());
+      return;
+    }
+    // Public agent-to-agent invite landing. The card travels in the URL fragment
+    // (decoded client-side), so this page needs no session and the host sees no
+    // payload. Reached by scanning the "Add me" QR / opening the shared link.
+    if (url.pathname === "/add" && req.method === "GET") {
+      sendHtml(res, 200, renderAddHtml());
       return;
     }
     if (url.pathname === "/pair") {

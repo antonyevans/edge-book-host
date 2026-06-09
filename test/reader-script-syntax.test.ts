@@ -5,6 +5,7 @@ import {
   renderPairHtml,
   renderAgentSetupHtml,
   renderOfflineHtml,
+  renderAddHtml,
 } from "../src/reader-html.js";
 
 // Regression guard for ea-claude-070: the inline reader JS lives inside a
@@ -27,6 +28,7 @@ const pages: Array<[string, string]> = [
   ["renderPairHtml", renderPairHtml({ csrf_token: "t" })],
   ["renderAgentSetupHtml", renderAgentSetupHtml()],
   ["renderOfflineHtml", renderOfflineHtml()],
+  ["renderAddHtml", renderAddHtml()],
 ];
 
 for (const [name, html] of pages) {
