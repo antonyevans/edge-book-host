@@ -111,14 +111,14 @@ export const READER_SCRIPT_APP = `  function render() {
     }
     if (state.view === "contacts") {
       html = values(state.contacts).map(function (contact) {
-        return item(contact.owner_label || contact.display_name || "Unnamed contact", (contact.aliases && contact.aliases[0]) || contact.card_url || peerEndpointLabel(contact), [
+        return item(contactLabel(contact) || "Unnamed contact", (contact.aliases && contact.aliases[0]) || contact.card_url || peerEndpointLabel(contact), [
           state.mutes[contact.peer_agent_id] ? "muted" : "active"
         ], contact, contact.relationship_state === "blocked" ? "risk" : "", state.mutes[contact.peer_agent_id] ? "" : action("Mute", "contact-mute", contact.peer_agent_id), [
           ["relationship", labelize(contact.relationship_state)],
           ["grants", (contact.capability_grants || []).length],
           ["endpoint", (contact.known_endpoints || []).length ? "known" : "missing"],
           ["local posture", state.mutes[contact.peer_agent_id] ? "muted" : "active"]
-        ], "", initials(contact.owner_label || contact.display_name || (contact.aliases && contact.aliases[0]) || contact.peer_agent_id))
+        ], "", initials(contactLabel(contact) || contact.peer_agent_id))
           + renderCapabilityList(contact.advertised_capabilities);
       }).join("") || renderEmpty("No contacts yet.");
     }

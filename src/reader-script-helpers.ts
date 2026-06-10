@@ -202,13 +202,19 @@ export const READER_SCRIPT_HELPERS = `(function () {
     const privacy = '<div class="view-copy">Honest privacy posture: envelopes are relayed through the host, which can in principle read them in transit &mdash; there is no end-to-end encryption claim for this MVP.</div>';
     return head + linkRow + qrBlock + steps + privacy + '</section>';
   }
-  // The human who owns the agent (owner_label) is the primary name; fall back to
-  // the agent's own display_name, then a generic label.
-  function publicOwnerLabel() { return (state.me && (state.me.owner_label || state.me.display_name)) || "Local owner"; }
+  // Name precedence (spec-098): profile.name -> owner_label -> display_name -> handle -> generic.
+  function publicOwnerLabel() {
+    if (!state.me) return "Local owner";
+    return (state.me.profile && state.me.profile.name) || state.me.owner_label || state.me.display_name || state.me.handle || "Local owner";
+  }
+  // Same precedence for peers: shared friend-profile name first, then legacy fields.
+  function contactLabel(contact) {
+    return (contact.friend_profile && contact.friend_profile.name) || contact.owner_label || contact.display_name || (contact.aliases && contact.aliases[0]) || shortId(contact.peer_agent_id);
+  }
   // The agent's own name — shown as a subtitle when it differs from the owner.
   function agentSubLabel() {
     if (!state.me) return "hosted session";
-    var owner = state.me.owner_label;
+    var owner = publicOwnerLabel();
     var agent = state.me.display_name;
     return (owner && agent && owner !== agent) ? agent : "hosted session";
   }
@@ -260,7 +266,8 @@ export const READER_SCRIPT_HELPERS = `(function () {
     if (state.me && state.me.agent_id === agentId) return publicOwnerLabel();
     const contact = contactFor(agentId);
     // Prefer the peer's human owner name when they shared it (opt-in on their side).
-    return contact.owner_label || contact.display_name || (contact.aliases && contact.aliases[0]) || shortId(agentId);
+    // contactFor() returns {} for unknown agents, so fall back to the raw id.
+    return contactLabel(contact) || shortId(agentId);
   }
   function peerEndpointLabel(contact) {
     const endpoints = contact.known_endpoints || [];
@@ -323,7 +330,7 @@ export const READER_SCRIPT_HELPERS = `(function () {
     var friendsList = document.getElementById("friendsList");
     if (friendsList) {
       friendsList.innerHTML = friends.slice(0, 6).map(function(c) {
-        var name = c.owner_label || c.display_name || (c.aliases && c.aliases[0]) || shortId(c.peer_agent_id);
+        var name = contactLabel(c);
         var ini = initials(name);
         var sub = c.relationship_state ? labelize(c.relationship_state) : "";
         return '<div class="friend-row"><div class="avatar mini">' + escapeHtml(ini) + '</div><div><div class="friend-name">' + escapeHtml(name) + '</div>' + (sub ? '<div class="friend-sub">' + escapeHtml(sub) + '</div>' : '') + '</div></div>';
