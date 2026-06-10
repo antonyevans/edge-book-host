@@ -3,7 +3,7 @@
 //
 // Trust boundaries (every route falls in exactly one):
 //   PUBLIC (no auth): GET / (landing|reader shell), /pair (rate-limited form),
-//     /agent-setup, /add, /handle/:handle (registry resolve), /healthz, /metrics.
+//     /agent-setup, /add, /handle/:handle (registry resolve), /health, /healthz, /metrics.
 //   SESSION + CSRF: /auth/* and every /api/* proxy call — session cookie
 //     (ebh_session, 12h) minted at pair time; device cookie (ebh_device, 28d)
 //     auto-resumes; mutating /api/* requires the x-csrf-token double-submit.
@@ -391,6 +391,13 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/healthz") {
       const m = channels.metrics();
       sendJson(res, 200, { ok: true, connected_channels: m.connected_channels, mailbox_queue_depth: m.mailbox_queue_depth });
+      return;
+    }
+    // Minimal unauthenticated liveness probe. /healthz (above) backs the fly.toml
+    // http_check and carries channel metrics; /health is the conventional path for
+    // external monitors and returns the smallest possible body.
+    if (url.pathname === "/health") {
+      sendJson(res, 200, { status: "ok" });
       return;
     }
     if (url.pathname === "/metrics") {
