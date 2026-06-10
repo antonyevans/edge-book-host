@@ -36,3 +36,7 @@ test("contact rows render the peer's shared friend_profile bio and socials", () 
   assert.match(html, /contact\.friend_profile\.bio/);
   assert.match(html, /renderSocialLinks\(contact\.friend_profile\.socials\)/);
 });
+
+test("profile panel no longer renders the session/friends/approvals/events stat boxes", () => {
+  assert.doesNotMatch(html, /\["session", "hosted active"\]/);
+});

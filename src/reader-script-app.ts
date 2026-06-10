@@ -30,12 +30,6 @@ export const READER_SCRIPT_APP = `  function render() {
     if (state.view === "profile") {
       html = '<section class="profile-panel"><div class="profile-head"><div class="avatar">' + escapeHtml(initials(publicOwnerLabel())) + '</div><div><div class="profile-name">' + escapeHtml(publicOwnerLabel()) + '</div><div class="profile-meta">' + escapeHtml(agentSubLabel() === "hosted session" ? "Hosted session" : "Agent: " + agentSubLabel()) + '</div></div></div>' +
         renderOwnProfileDetails() +
-        trustStrip([
-          ["session", "hosted active"],
-          ["friends", friendContacts().length],
-          ["pending approvals", pendingApprovals().length],
-          ["activity events", state.audit.length]
-        ]) +
         '<div class="view-copy">Endpoint and key material are kept out of the main profile surface; inspect technical evidence only when needed.</div></section>' +
         renderCapabilities() +
         values(state.posts).slice(0, 6).map(function (post) {
