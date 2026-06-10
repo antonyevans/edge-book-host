@@ -143,6 +143,31 @@ export const READER_SCRIPT_HELPERS = `(function () {
     if (!caps.length) return "";
     return '<section class="card"><h3>Capabilities</h3>' + renderCapabilityList(caps) + '</section>';
   }
+  // spec-098: linkify only http(s) URLs on a known-platform allowlist; everything
+  // else renders as escaped plain text. Never auto-fetch.
+  var SOCIAL_LINK_LABELS = { twitter: 1, x: 1, linkedin: 1, github: 1, website: 1, telegram: 1, facebook: 1, bluesky: 1, mastodon: 1 };
+  function renderSocialLinks(socials) {
+    if (!socials || !socials.length) return "";
+    return '<div class="profile-socials">' + socials.map(function (s) {
+      var value = String(s.value || "");
+      var isHttp = value.toLowerCase().indexOf("http://") === 0 || value.toLowerCase().indexOf("https://") === 0;
+      var labelKey = String(s.label || "").toLowerCase();
+      var linkable = Object.prototype.hasOwnProperty.call(SOCIAL_LINK_LABELS, labelKey) && isHttp;
+      var body = linkable
+        ? '<a href="' + escapeHtml(value) + '" target="_blank" rel="noopener noreferrer nofollow">' + escapeHtml(value) + '</a>'
+        : escapeHtml(value);
+      return '<div class="profile-social"><span class="social-label">' + escapeHtml(s.label) + '</span> ' + body + '</div>';
+    }).join("") + '</div>';
+  }
+  function renderOwnProfileDetails() {
+    var p = (state.me && state.me.profile) || {};
+    var parts =
+      (p.bio ? '<p class="profile-bio">' + escapeHtml(p.bio) + '</p>' : "") +
+      (p.location ? '<div class="profile-location">' + escapeHtml(p.location) + '</div>' : "") +
+      renderSocialLinks(p.socials);
+    if (!parts) return '<div class="view-copy">No profile yet &mdash; set one with <code>edge-book profile set --name &hellip; --bio &hellip; --social &hellip;</code></div>';
+    return parts;
+  }
   function renderSignalCard(sig) {
     var stale = sig.lifecycle === "stale";
     return '<article class="item signal' + (stale ? " signal-stale" : "") + '" data-signal="' + escapeHtml(sig.signal_id) + '">' +

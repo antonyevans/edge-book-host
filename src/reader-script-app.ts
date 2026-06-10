@@ -29,6 +29,7 @@ export const READER_SCRIPT_APP = `  function render() {
     let html = "";
     if (state.view === "profile") {
       html = '<section class="profile-panel"><div class="profile-head"><div class="avatar">' + escapeHtml(initials(publicOwnerLabel())) + '</div><div><div class="profile-name">' + escapeHtml(publicOwnerLabel()) + '</div><div class="profile-meta">' + escapeHtml(agentSubLabel() === "hosted session" ? "Hosted session" : "Agent: " + agentSubLabel()) + '</div></div></div>' +
+        renderOwnProfileDetails() +
         trustStrip([
           ["session", "hosted active"],
           ["friends", friendContacts().length],

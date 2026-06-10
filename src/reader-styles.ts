@@ -239,6 +239,11 @@ pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 12px;
 .profile-head .avatar { width: 56px; height: 56px; font-size: 20px; }
 .profile-name { font-size: 17px; font-weight: 600; font-family: Fraunces, serif; color: var(--ink); overflow-wrap: anywhere; }
 .profile-meta { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.profile-bio { margin: 0; font-size: 14px; line-height: 1.5; }
+.profile-location { font-size: 13px; color: var(--muted); }
+.profile-socials { display: grid; gap: 4px; }
+.profile-social { font-size: 13px; }
+.profile-social .social-label { font-weight: 600; margin-right: 6px; text-transform: capitalize; }
 .invite-link { display: grid; gap: 4px; }
 .invite-link-row { display: flex; gap: 8px; align-items: stretch; }
 .invite-url { flex: 1 1 auto; min-width: 0; font-family: monospace; font-size: 12px;
