@@ -22,7 +22,9 @@ import { HostStore } from "./store.js";
 import { ChannelRegistry } from "./channels.js";
 import { normalizePairingCode, randomToken } from "./tokens.js";
 import { RateLimiter } from "./rate-limit.js";
-import { renderAddHtml, renderAgentSetupHtml, renderOfflineHtml, renderPairHtml, renderReaderHtml } from "./reader-html.js";
+import { renderReaderHtml } from "./reader-html.js";
+import { renderAddHtml, renderAgentSetupHtml, renderOfflineHtml } from "./reader-landing.js";
+import { renderPairHtml } from "./reader-pair.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || "0.0.0.0";

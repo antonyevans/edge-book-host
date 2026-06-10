@@ -1,12 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  renderReaderHtml,
-  renderPairHtml,
-  renderAgentSetupHtml,
-  renderOfflineHtml,
-  renderAddHtml,
-} from "../src/reader-html.js";
+import { renderReaderHtml } from "../src/reader-html.js";
+import { renderAddHtml, renderAgentSetupHtml, renderOfflineHtml } from "../src/reader-landing.js";
+import { renderPairHtml } from "../src/reader-pair.js";
 
 // Regression guard for ea-claude-070: the inline reader JS lives inside a
 // template-literal string, so `tsc` never parses it and the HTML-substring

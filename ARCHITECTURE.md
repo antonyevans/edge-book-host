@@ -21,7 +21,10 @@ envelopes between dial-out agents, and runs the handle registry. Pairs with the
 | `handles.ts` | handle slug rules + claim signature verification (spec-096) |
 | `tokens.ts` | token/pairing-code generation, channel_id derivation, timing-safe compare |
 | `rate-limit.ts` | fixed-window limiter for /pair |
-| `reader-html.ts` | server-rendered pages (reader shell, pair, setup, add, offline) |
+| `reader-html.ts` | server-rendered reader app shell (`renderReaderHtml`) |
+| `reader-pair.ts` | pairing-code landing page (`/pair` form + QR + how-it-works) |
+| `reader-landing.ts` | static landing pages: agent setup, "Add me" deep link, offline interstitial |
+| `reader-escape.ts` | HTML escaping (`escapeText`/`escapeAttr`) shared by all page renderers |
 | `reader-script.ts` | the reader's entire client-side app (one inline script) |
 | `reader-styles.ts` / `reader-assets.ts` | inline CSS / SVG assets (strict CSP, nothing remote) |
 | `qrcode-lib.ts` | vendored QR generator served to the pair page |
