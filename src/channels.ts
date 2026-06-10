@@ -1,5 +1,7 @@
 import type { WebSocket } from "ws";
 import { channelIdFromKey, randomToken, timingSafeEqual } from "./tokens.js";
+import { isValidSlug, verifyHandleClaim } from "./handles.js";
+import type { HandleClaimErrFrame } from "./contracts.js";
 import type { HostStore } from "./store.js";
 
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -325,6 +327,26 @@ export class ChannelRegistry {
         logEvent("mailbox_ack", { id, to: cref(deleted) });
         this.counters.acked++;
       }
+      return;
+    }
+    // Handle claim (spec-096): the agent claims a human-friendly handle, backed
+    // by a self-signed card + a claim signature over {handle, agent_did,
+    // claimed_at}. The host verifies the claim, persists the signed card, and
+    // replies ok/err. Reasons map 1:1 to verifyHandleClaim's verdict plus the
+    // slug pre-check and the store's first-come-first-served "taken".
+    if (type === "handle_claim") {
+      const request_id = String(frame.request_id || "");
+      const handle = String(frame.handle || "");
+      const claimed_at = Number(frame.claimed_at || 0);
+      const claim_sig = String(frame.claim_sig || "");
+      const card = frame.card as { agent_id?: string };
+      if (!isValidSlug(handle)) { this.send(ws, { type: "handle_claim_err", request_id, reason: "bad_format" } satisfies HandleClaimErrFrame); return; }
+      const verdict = verifyHandleClaim(card as never, handle, claimed_at, claim_sig);
+      if (verdict !== "ok") { this.send(ws, { type: "handle_claim_err", request_id, reason: verdict } satisfies HandleClaimErrFrame); return; }
+      const result = this.store.claimHandle({ handle, agent_did: String(card.agent_id), card, claim_sig, claimed_at });
+      if (result === "taken") { this.send(ws, { type: "handle_claim_err", request_id, reason: "taken" } satisfies HandleClaimErrFrame); return; }
+      logEvent("handle_claim", { handle, agent_did: cref(String(card.agent_id)) });
+      this.send(ws, { type: "handle_claim_ok", request_id, handle });
       return;
     }
     // Unknown — echo back on the originating socket.
