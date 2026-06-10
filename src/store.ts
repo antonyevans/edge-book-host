@@ -1,3 +1,15 @@
+// HostStore — all host persistence (single JSON file under DATA_DIR, written
+// atomically via temp+rename). Holds: pairing codes (TTL, single-use),
+// sessions, device tokens (metadata only — the token secret is hashed),
+// channel meta (TOFU key per channel), the mailbox queue, and the handle
+// registry (spec-096: handle -> signed AgentCard, bound to the agent DID).
+//
+// Invariants:
+//   - mailbox is at-least-once: a message is deleted ONLY on ack by the
+//     addressed recipient; everything unacked is redelivered on reconnect and
+//     purged after EDGE_BOOK_MAILBOX_TTL_MS (default 7 days);
+//   - a handle is grantable iff free OR already owned by the same DID
+//     (idempotent re-claim); claims are signature-verified in handles.ts.
 import fs from "node:fs";
 import path from "node:path";
 import type { MailboxMessage } from "./contracts.js";

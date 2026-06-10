@@ -1,3 +1,11 @@
+// Server-rendered HTML for every page the host serves. Render functions:
+//   renderReaderHtml   — the reader app shell (script: reader-script.ts,
+//                        styles: reader-styles.ts)
+//   renderPairHtml     — pairing-code form (+ QR)
+//   renderAgentSetupHtml, renderAddHtml ("Add me" deep link), renderOfflineHtml
+// Assets live in reader-assets.ts. Everything is inline — strict CSP.
+// Invariant: ALL interpolated dynamic values pass escapeText/escapeAttr.
+//
 // Reader UX, ported from openclaw edge-book plugin `vendor/reader-src/src/http.ts`
 // (commit f36775a). Differences from source:
 //   * No POST /auth/login bootstrap — the host already authenticated via the
