@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "test": "tsx --test test/tokens.test.ts test/store.test.ts test/rate-limit.test.ts test/integration.test.ts test/mailbox.test.ts test/reader-object.test.ts test/reader-script-syntax.test.ts test/convergence.test.ts test/pair-csrf.test.ts test/per-device.test.ts test/reader-taxonomy.test.ts test/reader-remaining-types.test.ts test/reader-contact-capabilities.test.ts test/reader-received.test.ts test/observability.test.ts test/reader-add.test.ts test/deeplink-add.test.ts test/handles.test.ts test/health.test.ts",
-    "typecheck": "tsc -p . --noEmit"
+    "typecheck": "tsc -p . --noEmit",
+    "lint": "eslint"
   },
   "dependencies": {
     "cookie": "0.6.0",
@@ -19,8 +20,10 @@
     "@types/cookie": "0.6.0",
     "@types/node": "20.14.10",
     "@types/ws": "8.5.12",
+    "eslint": "^10.4.1",
     "tsx": "4.19.2",
-    "typescript": "5.5.4"
+    "typescript": "5.5.4",
+    "typescript-eslint": "^8.61.0"
   },
   "engines": {
     "node": ">=20.0.0"

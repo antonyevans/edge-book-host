@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- GRANDFATHERED at 626 code lines (2026-06-10): multi-page server-rendered HTML; split into per-page render modules (reader-<page>.ts), then remove this disable. See DESIGN.md. */
 // Server-rendered HTML for every page the host serves. Render functions:
 //   renderReaderHtml   — the reader app shell (script: reader-script.ts,
 //                        styles: reader-styles.ts)

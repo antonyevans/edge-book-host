@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- GRANDFATHERED at 762 code lines (2026-06-10): single inline client app (strict CSP, parsed whole by reader-script-syntax.test.ts); split into concatenated per-feature script sections, then remove this disable. See DESIGN.md. */
 // The hosted reader's ENTIRE client-side application, served as one inline
 // <script> by renderReaderHtml (no bundler, no external assets). It talks only
 // to /api/* (proxied to the paired agent over its channel) and /auth/*.

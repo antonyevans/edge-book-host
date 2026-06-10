@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- GRANDFATHERED at 771 code lines (2026-06-10): inline CSS string constants; split LANDING_STYLES / READER_STYLES into per-page style modules, then remove this disable. See DESIGN.md. */
 // Style sheets for every server-rendered page. LANDING_STYLES covers /pair,
 // /agent-setup, /add, and the offline page; READER_STYLES is the reader app.
 // Served inline (strict CSP, no external stylesheets).

@@ -10,6 +10,7 @@ on:
       - ".gitignore"
       - ".dockerignore"
       - "LICENSE"
+  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -27,6 +28,7 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: npx eslint src
       - run: npx tsc -p . --noEmit
       - run: npm test
 
