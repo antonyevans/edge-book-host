@@ -4,6 +4,15 @@ Read `ARCHITECTURE.md` for the code map. `docs/wire-protocol.md` is the
 normative host↔agent protocol; `src/contracts.ts` is the canonical type seam
 shared (by spec, not by import) with the `edge-book-cli` repo.
 
+## Size rules (read first — a hook enforces these)
+
+- No source file may exceed 500 code lines (`npm run lint`; a PostToolUse hook
+  blocks oversized edits).
+- New features get new modules — see @DESIGN.md for the placement table.
+  **If unsure where code goes: create a new file, never append.**
+- Never add `eslint-disable max-lines` without a justification comment and a
+  follow-up extraction task.
+
 ## Commands
 
 ```bash
