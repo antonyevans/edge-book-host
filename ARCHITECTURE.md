@@ -25,7 +25,9 @@ envelopes between dial-out agents, and runs the handle registry. Pairs with the
 | `reader-pair.ts` | pairing-code landing page (`/pair` form + QR + how-it-works) |
 | `reader-landing.ts` | static landing pages: agent setup, "Add me" deep link, offline interstitial |
 | `reader-escape.ts` | HTML escaping (`escapeText`/`escapeAttr`) shared by all page renderers |
-| `reader-script.ts` | the reader's entire client-side app (one inline script) |
+| `reader-script.ts` | assembles the reader's inline client app from the two script sections |
+| `reader-script-helpers.ts` | reader script section 1: state, api plumbing, card/list renderers |
+| `reader-script-app.ts` | reader script section 2: render() dispatcher, actions, polling, deep-link boot |
 | `reader-styles.ts` / `reader-assets.ts` | inline CSS / SVG assets (strict CSP, nothing remote) |
 | `qrcode-lib.ts` | vendored QR generator served to the pair page |
 
