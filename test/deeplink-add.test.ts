@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderAddHtml, renderReaderHtml } from "../src/reader-html.js";
+import { renderReaderHtml } from "../src/reader-html.js";
+import { renderAddHtml } from "../src/reader-landing.js";
 import { startServer } from "./helpers.js";
 
 test("renderAddHtml: offers a one-tap 'Add to my agent' handoff gated on session", () => {
