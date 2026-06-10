@@ -28,7 +28,10 @@ envelopes between dial-out agents, and runs the handle registry. Pairs with the
 | `reader-script.ts` | assembles the reader's inline client app from the two script sections |
 | `reader-script-helpers.ts` | reader script section 1: state, api plumbing, card/list renderers |
 | `reader-script-app.ts` | reader script section 2: render() dispatcher, actions, polling, deep-link boot |
-| `reader-styles.ts` / `reader-assets.ts` | inline CSS / SVG assets (strict CSP, nothing remote) |
+| `reader-styles.ts` | assembles LANDING_STYLES from its two sections; holds READER_STYLES |
+| `reader-styles-landing.ts` | landing CSS section 1: tokens, shell, hero, pairing card |
+| `reader-styles-sections.ts` | landing CSS section 2: pipe diagram, setup steps, footer, copy button |
+| `reader-assets.ts` | inline SVG assets (strict CSP, nothing remote) |
 | `qrcode-lib.ts` | vendored QR generator served to the pair page |
 
 `vendor/reader-src/` is a ONE-WAY port snapshot from the CLI repo — reference
