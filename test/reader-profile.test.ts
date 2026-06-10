@@ -31,3 +31,8 @@ test("profile view has an empty state when no profile is set", () => {
 test("social allowlist lookup is own-property safe (no prototype-key bypass)", () => {
   assert.match(html, /hasOwnProperty\.call\(SOCIAL_LINK_LABELS/);
 });
+
+test("contact rows render the peer's shared friend_profile bio and socials", () => {
+  assert.match(html, /contact\.friend_profile\.bio/);
+  assert.match(html, /renderSocialLinks\(contact\.friend_profile\.socials\)/);
+});

@@ -112,6 +112,10 @@ export const READER_SCRIPT_APP = `  function render() {
     }
     if (state.view === "contacts") {
       html = values(state.contacts).map(function (contact) {
+        // spec-098: peer-shared friend_profile detail — only fields the peer chose to share
+        var fp = contact.friend_profile || {};
+        var fpDetail = (fp.bio ? '<p class="profile-bio">' + escapeHtml(contact.friend_profile.bio) + '</p>' : "") +
+          (fp.socials ? renderSocialLinks(contact.friend_profile.socials) : "");
         return item(contactLabel(contact) || "Unnamed contact", (contact.aliases && contact.aliases[0]) || contact.card_url || peerEndpointLabel(contact), [
           state.mutes[contact.peer_agent_id] ? "muted" : "active"
         ], contact, contact.relationship_state === "blocked" ? "risk" : "", state.mutes[contact.peer_agent_id] ? "" : action("Mute", "contact-mute", contact.peer_agent_id), [
@@ -120,6 +124,7 @@ export const READER_SCRIPT_APP = `  function render() {
           ["endpoint", (contact.known_endpoints || []).length ? "known" : "missing"],
           ["local posture", state.mutes[contact.peer_agent_id] ? "muted" : "active"]
         ], "", initials(contactLabel(contact) || contact.peer_agent_id))
+          + fpDetail
           + renderCapabilityList(contact.advertised_capabilities);
       }).join("") || renderEmpty("No contacts yet.");
     }

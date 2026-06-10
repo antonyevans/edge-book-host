@@ -187,6 +187,7 @@ main { min-width: 0; }
 pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.5;
   background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
   color: var(--muted); border-radius: 0 0 8px 8px; }
+code { font-size: 0.92em; }
 
 /* ── Avatar ── */
 .avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;

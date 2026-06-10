@@ -150,7 +150,8 @@ export const READER_SCRIPT_HELPERS = `(function () {
     if (!socials || !socials.length) return "";
     return '<div class="profile-socials">' + socials.map(function (s) {
       var value = String(s.value || "");
-      var isHttp = value.toLowerCase().indexOf("http://") === 0 || value.toLowerCase().indexOf("https://") === 0;
+      var lower = value.toLowerCase();
+      var isHttp = lower.indexOf("http://") === 0 || lower.indexOf("https://") === 0;
       var labelKey = String(s.label || "").toLowerCase();
       var linkable = Object.prototype.hasOwnProperty.call(SOCIAL_LINK_LABELS, labelKey) && isHttp;
       var body = linkable
