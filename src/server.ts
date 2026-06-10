@@ -1,3 +1,19 @@
+// Edge Book host — single HTTP+WebSocket server (the repo's only entry point;
+// `npm start` runs the compiled dist/server.js, fly.toml serves it).
+//
+// Trust boundaries (every route falls in exactly one):
+//   PUBLIC (no auth): GET / (landing|reader shell), /pair (rate-limited form),
+//     /agent-setup, /add, /handle/:handle (registry resolve), /healthz, /metrics.
+//   SESSION + CSRF: /auth/* and every /api/* proxy call — session cookie
+//     (ebh_session, 12h) minted at pair time; device cookie (ebh_device, 28d)
+//     auto-resumes; mutating /api/* requires the x-csrf-token double-submit.
+//   CHANNEL (agent socket): wss /agent/ws — TOFU agent_key, see channels.ts
+//     and docs/wire-protocol.md.
+//
+// Invariant: the host never forwards browser cookies/authorization headers to
+// the agent — the channel itself is the authorization (wire-protocol.md §API
+// proxy). Sessions/devices are bound to a channel_id and dropped on
+// sessions_revoke.
 import http from "node:http";
 import { URL } from "node:url";
 import cookie from "cookie";

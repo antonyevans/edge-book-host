@@ -1,3 +1,15 @@
+// ChannelRegistry — the live WebSocket side of the host <-> agent protocol
+// (canonical doc: docs/wire-protocol.md; frame TYPES: src/contracts.ts).
+// One agent identity = one channel_id = sha256(agent_key), TOFU-locked: a
+// reconnect with a different key for the same channel is rejected.
+//
+// Invariants:
+//   - the host relays OPAQUE mailbox blobs; it never parses envelope plaintext;
+//   - `from` on mailbox_deliver is stamped from the authenticated socket —
+//     never trusted from the sender's payload;
+//   - per-request 30s timeout returns 504 to the browser but keeps the channel;
+//   - idle channels (no pair + no authed /api hit for EDGE_BOOK_IDLE_MS) get
+//     stand_down and MUST NOT be reconnected by the agent.
 import type { WebSocket } from "ws";
 import { channelIdFromKey, randomToken, timingSafeEqual } from "./tokens.js";
 import { isValidSlug, verifyHandleClaim } from "./handles.js";
