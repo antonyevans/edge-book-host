@@ -13,21 +13,46 @@ shared (by spec, not by import) with the `edge-book-cli` repo.
 - Never add `eslint-disable max-lines` without a justification comment and a
   follow-up extraction task.
 
-## Commands
+## Verification commands (spec-0042 — run before claiming done)
+
+All non-interactive with meaningful exit codes. A completion claim names the
+command(s) run and their observed output — "done" without evidence is not done.
 
 ```bash
+npx eslint src          # lint — size/style gates, must be clean
 npx tsc -p . --noEmit   # typecheck (strict) — must stay clean
-npm test                # 78 tests via tsx --test — must stay green
-npm run dev             # local server (tsx watch src/server.ts)
-npm run build && npm start
+npm test                # full suite via tsx --test — must stay green
+npm run build && npm start   # production build + boot smoke
+npm run dev             # local server (tsx watch src/server.ts) — dev only
 ```
 
 Manual two-machine smoke: `docs/two-machine-smoke.md`.
 
-## Deploy warning
+CI (`deploy.yml`) runs lint → typecheck → tests on every push and PR; merging
+on red is prohibited.
 
-**Pushing to main deploys production** (Fly.io via deploy.yml). Never merge a
-branch to main without explicitly flagging this to the human.
+## Workflow (spec-0041 / spec-0042)
+
+This repo is **deploy-on-merge**: merging or pushing to `main` deploys
+production (Fly.io via deploy.yml). **Only the human merges main.** The
+agent's last action on a task is requesting the merge with verification
+evidence attached — never merging itself.
+
+- Worktree + branch per task (`feat|fix|refactor|chore/<slug>`); never work on
+  `main`. Hard ceiling: 4 parallel agent sessions per repo (default 2–3).
+- Target PR size ≤ ~400 changed lines of authored code; bigger work splits
+  into independently reviewable stacked PRs.
+- Production-bound work gets a **fresh-context review**: a separate session
+  with no memory of writing the code reads the full diff before the PR is
+  ready. Self-review by the writing session does not count.
+- **Frozen tests:** during refactors, assertions/fixtures/inputs are frozen —
+  a failing test means the step changed behavior; revert the step, never edit
+  the test. A test believed wrong goes to FINDINGS.md untouched.
+- New behavior ships with tests in the same PR, colocated per repo pattern.
+- Generator modules (`reader-*.ts` render HTML/CSS/JS): refactor equivalence
+  is a byte-level hash diff of rendered output, not passing tests alone.
+- **Reversions:** agent code substantially rewritten or reverted within 30
+  days of merge gets one line (date, PR, cause) in FINDINGS.md `## Reversions`.
 
 ## Frozen surfaces
 
