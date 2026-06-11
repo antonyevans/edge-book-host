@@ -15,6 +15,7 @@ import { channelIdFromKey, randomToken, timingSafeEqual } from "./tokens.js";
 import { isValidSlug, verifyHandleClaim } from "./handles.js";
 import type { HandleClaimErrFrame } from "./contracts.js";
 import { logStructured, shortRef, traceRing } from "./observe.js";
+import { SupportSendLimiter, checkSupportSend } from "./support.js";
 import type { HostStore } from "./store.js";
 
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -93,6 +94,8 @@ export interface ChannelMetrics {
 export class ChannelRegistry {
   private channels = new Map<string, Channel>();
   private counters = { enqueued: 0, delivered: 0, acked: 0, ack_rejects: 0 };
+  // Per-sender budget for sends addressed to the SUPPORT_DID recipient (spec-134).
+  private supportLimiter = new SupportSendLimiter();
 
   constructor(private store: HostStore) {}
 
@@ -313,6 +316,15 @@ export class ChannelRegistry {
       }
       if (Buffer.byteLength(blob_b64, "base64") > MAX_BLOB_BYTES) {
         this.send(ws, { type: "mailbox_send_err", request_id, error: "blob_too_large" });
+        return;
+      }
+      // Support mailbox guard (spec-134): tighter size cap + per-sender rate
+      // limit for frames addressed to SUPPORT_DID. Frame metadata only — the
+      // blob stays opaque. No-op when SUPPORT_DID is unset.
+      const support = checkSupportSend(this.supportLimiter, to, channel.channel_id, Buffer.byteLength(blob_b64, "base64"));
+      if (!support.ok) {
+        logStructured("support_send_reject", { from: shortRef(channel.channel_id), reason: support.error });
+        this.send(ws, { type: "mailbox_send_err", request_id, error: support.error });
         return;
       }
       const id = randomToken(12);
