@@ -24,6 +24,7 @@ import { normalizePairingCode, randomToken } from "./tokens.js";
 import { RateLimiter } from "./rate-limit.js";
 import { renderReaderHtml } from "./reader-html.js";
 import { renderAddHtml, renderAgentSetupHtml, renderOfflineHtml } from "./reader-landing.js";
+import { renderDirectoryHtml } from "./reader-directory.js";
 import { renderPairHtml } from "./reader-pair.js";
 import { handleDirectory } from "./http-directory.js";
 
@@ -455,6 +456,10 @@ const server = http.createServer(async (req, res) => {
     // remain resolvable via /handle/:slug but never appear here.
     if (url.pathname === "/directory" && req.method === "GET") {
       handleDirectory(req, res, url, store, sendJson);
+      return;
+    }
+    if (url.pathname === "/people" && req.method === "GET") {
+      sendHtml(res, 200, renderDirectoryHtml());
       return;
     }
     if (url.pathname === "/pair") {

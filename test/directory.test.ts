@@ -88,6 +88,19 @@ test("GET /handle/:slug still resolves dir-hidden (non-discoverable)", async () 
   assert.equal(card.agent_id, "did:openclaw:dir-hidden");
 });
 
+test("GET /people returns HTML directory page", async () => {
+  const { startServer } = await import("./helpers.ts");
+  const { baseUrl } = await startServer();
+
+  const res = await fetch(`${baseUrl}/people`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type") ?? "", /text\/html/);
+  const html = await res.text();
+  assert.ok(html.includes("Edge Book"), "page must include Edge Book branding");
+  assert.ok(html.includes("/directory"), "page must reference /directory API");
+  assert.ok(html.toLowerCase().includes("people"), "page must mention people");
+});
+
 test("GET /directory falls back to handle slug when card has no display_name", async () => {
   const { startServer, store } = await import("./helpers.ts");
   const { baseUrl } = await startServer();
