@@ -71,3 +71,9 @@ evidence attached — never merging itself.
 - `test/reader-script-syntax.test.ts` parses the reader script literal — it
   catches syntax errors at test time; keep the script valid standalone JS.
 - New persisted state goes in `HostStore` (atomic single-file JSON).
+
+## Ownership
+
+- ARCHITECTURE.md "Module ownership" names the accountable owner per module
+  class; .github/CODEOWNERS routes review. Every merge deploys: the owner
+  merges, no exceptions. Frozen surfaces change only via an owner-approved PR.
