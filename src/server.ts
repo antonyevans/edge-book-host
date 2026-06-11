@@ -4,6 +4,8 @@
 // Trust boundaries (every route falls in exactly one):
 //   PUBLIC (no auth): GET / (landing|reader shell), /pair (rate-limited form),
 //     /agent-setup, /add, /handle/:handle (registry resolve), /health, /healthz, /metrics.
+//   ADMIN (Bearer ADMIN_TOKEN, fail-closed 404 when unset): /admin/agents,
+//     /admin/trace/:trace_id — see src/admin.ts (ea-claude-138).
 //   SESSION + CSRF: /auth/* and every /api/* proxy call — session cookie
 //     (ebh_session, 12h) minted at pair time; device cookie (ebh_device, 28d)
 //     auto-resumes; mutating /api/* requires the x-csrf-token double-submit.
@@ -20,6 +22,8 @@ import cookie from "cookie";
 import { WebSocketServer } from "ws";
 import { HostStore } from "./store.js";
 import { ChannelRegistry } from "./channels.js";
+import { handleAdmin } from "./admin.js";
+import { traceRing } from "./observe.js";
 import { normalizePairingCode, randomToken } from "./tokens.js";
 import { RateLimiter } from "./rate-limit.js";
 import { renderReaderHtml } from "./reader-html.js";
@@ -464,6 +468,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === "/pair") {
       await handlePair(req, res, url);
+      return;
+    }
+    // Admin/observability surface (ea-claude-138): Bearer ADMIN_TOKEN auth,
+    // fail-closed 404 when ADMIN_TOKEN is unset. Sets its own headers.
+    if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) {
+      setSecurityHeaders(res);
+      handleAdmin(req, res, url, { store, channels, traceRing });
       return;
     }
     const session = resolveSession(req, res);
