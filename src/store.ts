@@ -82,6 +82,7 @@ export interface HandleRecord {
   card: unknown;          // the full signed AgentCard (opaque to the host)
   claimed_at: number;
   claim_sig: string;
+  discoverable?: boolean; // undefined means true (default discoverable)
 }
 
 // What survives an ack (spec-097): enough for the SENDER (`from` is the
@@ -277,6 +278,18 @@ export class HostStore {
 
   resolveHandle(handle: string): HandleRecord | null {
     return Object.hasOwn(this.state.handles, handle) ? this.state.handles[handle] ?? null : null;
+  }
+
+  // Returns all discoverable handles (discoverable !== false), sorted by
+  // claimed_at ascending, with offset/limit pagination. Max limit 500.
+  listHandles(opts: { offset?: number; limit?: number } = {}): { handles: HandleRecord[]; total: number } {
+    const all = Object.values(this.state.handles)
+      .filter((r) => r.discoverable !== false)
+      .sort((a, b) => a.claimed_at - b.claimed_at);
+    const total = all.length;
+    const offset = opts.offset ?? 0;
+    const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
+    return { handles: all.slice(offset, offset + limit), total };
   }
 
   // --- pairing codes ---

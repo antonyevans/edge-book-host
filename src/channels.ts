@@ -388,11 +388,14 @@ export class ChannelRegistry {
       const handle = String(frame.handle || "");
       const claimed_at = Number(frame.claimed_at || 0);
       const claim_sig = String(frame.claim_sig || "");
+      // discoverable defaults to true — old clients that don't send the field
+      // remain fully discoverable; new clients may pass false to opt out of /directory.
+      const discoverable = (frame as { discoverable?: unknown }).discoverable !== false;
       const card = frame.card as { agent_id?: string };
       if (!isValidSlug(handle)) { this.send(ws, { type: "handle_claim_err", request_id, reason: "bad_format" } satisfies HandleClaimErrFrame); return; }
       const verdict = verifyHandleClaim(card as never, handle, claimed_at, claim_sig);
       if (verdict !== "ok") { this.send(ws, { type: "handle_claim_err", request_id, reason: verdict } satisfies HandleClaimErrFrame); return; }
-      const result = this.store.claimHandle({ handle, agent_did: String(card.agent_id), card, claim_sig, claimed_at });
+      const result = this.store.claimHandle({ handle, agent_did: String(card.agent_id), card, claim_sig, claimed_at, discoverable });
       if (result === "taken") { this.send(ws, { type: "handle_claim_err", request_id, reason: "taken" } satisfies HandleClaimErrFrame); return; }
       logEvent("handle_claim", { handle, agent_did: cref(String(card.agent_id)) });
       this.send(ws, { type: "handle_claim_ok", request_id, handle });

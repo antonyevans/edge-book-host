@@ -24,7 +24,9 @@ import { normalizePairingCode, randomToken } from "./tokens.js";
 import { RateLimiter } from "./rate-limit.js";
 import { renderReaderHtml } from "./reader-html.js";
 import { renderAddHtml, renderAgentSetupHtml, renderOfflineHtml } from "./reader-landing.js";
+import { renderDirectoryHtml } from "./reader-directory.js";
 import { renderPairHtml } from "./reader-pair.js";
+import { handleDirectory } from "./http-directory.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -447,6 +449,17 @@ const server = http.createServer(async (req, res) => {
       const rec = store.resolveHandle(handle);
       if (!rec) { sendJson(res, 404, { ok: false, error: "not_found" }); return; }
       sendJson(res, 200, rec.card);
+      return;
+    }
+    // Public handle directory (spec-136): paginated list of discoverable handles.
+    // No session required — discoverable handles are public. Non-discoverable handles
+    // remain resolvable via /handle/:slug but never appear here.
+    if (url.pathname === "/directory" && req.method === "GET") {
+      handleDirectory(req, res, url, store, sendJson);
+      return;
+    }
+    if (url.pathname === "/people" && req.method === "GET") {
+      sendHtml(res, 200, renderDirectoryHtml());
       return;
     }
     if (url.pathname === "/pair") {

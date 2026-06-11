@@ -90,6 +90,47 @@ test("claimHandle is idempotent for the same DID, taken for a different DID", ()
   assert.equal(s.resolveHandle("antony-evans")?.agent_did, "did:openclaw:abc");
 });
 
+test("isValidSlug rejects reserved handle 'directory'", () => {
+  assert.equal(isValidSlug("directory"), false);
+});
+
+test("listHandles excludes discoverable:false records", () => {
+  const s = tmpStore();
+  s.claimHandle({ handle: "alice-smith", agent_did: "did:openclaw:a", card: { agent_id: "did:openclaw:a", display_name: "Alice" }, claim_sig: "s", discoverable: true, claimed_at: 1 });
+  s.claimHandle({ handle: "hidden-user", agent_did: "did:openclaw:h", card: { agent_id: "did:openclaw:h", display_name: "Hidden" }, claim_sig: "s", discoverable: false, claimed_at: 2 });
+  s.claimHandle({ handle: "default-user", agent_did: "did:openclaw:d", card: { agent_id: "did:openclaw:d", display_name: "Default" }, claim_sig: "s", claimed_at: 3 });
+  const { handles, total } = s.listHandles({ offset: 0, limit: 100 });
+  const slugs = handles.map((h) => h.handle);
+  assert.ok(slugs.includes("alice-smith"), "discoverable:true should be listed");
+  assert.ok(slugs.includes("default-user"), "missing discoverable should default to listed");
+  assert.ok(!slugs.includes("hidden-user"), "discoverable:false should be excluded");
+  assert.equal(total, 2);
+});
+
+test("listHandles paginates correctly", () => {
+  const s = tmpStore();
+  for (let i = 0; i < 5; i++) {
+    s.claimHandle({ handle: `agent-${String(i).padStart(2, "0")}`, agent_did: `did:openclaw:${i}`, card: { agent_id: `did:openclaw:${i}`, display_name: `Agent ${i}` }, claim_sig: "s", claimed_at: i });
+  }
+  const page1 = s.listHandles({ offset: 0, limit: 2 });
+  const page2 = s.listHandles({ offset: 2, limit: 2 });
+  assert.equal(page1.handles.length, 2);
+  assert.equal(page2.handles.length, 2);
+  assert.equal(page1.total, 5);
+  assert.equal(page2.total, 5);
+  // No overlap between pages.
+  const p1slugs = new Set(page1.handles.map((h) => h.handle));
+  assert.ok(!page2.handles.some((h) => p1slugs.has(h.handle)));
+});
+
+test("resolveHandle still works for non-discoverable handles", () => {
+  const s = tmpStore();
+  s.claimHandle({ handle: "secret-handle", agent_did: "did:openclaw:h", card: { agent_id: "did:openclaw:h", display_name: "Hidden" }, claim_sig: "s", discoverable: false });
+  const rec = s.resolveHandle("secret-handle");
+  assert.ok(rec, "non-discoverable handle must still resolve via direct lookup");
+  assert.equal(rec.agent_did, "did:openclaw:h");
+});
+
 // ── Live transport (spec-096, Task 3) ───────────────────────────────────────
 // These exercise the real server: the GET /handle/:handle route and the
 // handle_claim WS frame handled in channels.handleFrame. The shared server
