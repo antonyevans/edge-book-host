@@ -61,6 +61,12 @@ export interface MailboxMessage {
   blob: string;
   /** Host enqueue timestamp (epoch ms). */
   ts: number;
+  /** OPTIONAL observability correlation id (ea-claude-138). ADDITIVE: a
+   *  sender that stamps a trace_id inside its signed envelope mirrors it
+   *  here so the host can log/correlate hops WITHOUT parsing the blob.
+   *  Absent from old (≤0.12.x) senders — never required, never trusted for
+   *  routing or auth. */
+  trace_id?: string;
 }
 
 /**
@@ -102,6 +108,8 @@ export interface MailboxSendFrame {
   request_id: string;
   to: RecipientAddress;
   blob_b64: string;
+  /** Optional trace correlation id (ea-claude-138) — see MailboxMessage. */
+  trace_id?: string;
 }
 export interface MailboxSendOkFrame {
   type: "mailbox_send_ok";
@@ -119,6 +127,8 @@ export interface MailboxDeliverFrame {
   from: RecipientAddress;
   blob_b64: string;
   ts: number;
+  /** Optional trace correlation id (ea-claude-138), echoed from the send. */
+  trace_id?: string;
 }
 export interface MailboxAckFrame {
   type: "mailbox_ack";

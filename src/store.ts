@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { MailboxMessage } from "./contracts.js";
+import { logStructured, shortRef, traceRing } from "./observe.js";
 
 // Receipts ledger bounds (spec-097): acked entries expire after the TTL
 // (purged by the existing purge() sweep) and the ledger is capped at insert
@@ -171,7 +172,11 @@ export class HostStore {
       if (v.expires_at <= now) delete this.state.device_tokens[k];
     }
     for (const [k, v] of Object.entries(this.state.mailbox)) {
-      if (v.expires_at <= now) delete this.state.mailbox[k];
+      if (v.expires_at <= now) {
+        delete this.state.mailbox[k];
+        logStructured("mailbox_expire", { id: v.id, to: shortRef(v.to), from: shortRef(v.from), trace_id: v.trace_id });
+        if (v.trace_id) traceRing.record({ trace_id: v.trace_id, hop: "expire", id: v.id, from: shortRef(v.from), to: shortRef(v.to), ts: now });
+      }
     }
     for (const [k, v] of Object.entries(this.state.receipts)) {
       if (v.acked_at + RECEIPT_TTL_MS <= now) delete this.state.receipts[k];
@@ -205,6 +210,28 @@ export class HostStore {
   // Peek a queued message's recipient (`to`) without deleting it.
   peekMailboxRecipient(id: string): string | null {
     return this.state.mailbox[id]?.to ?? null;
+  }
+
+  // Peek a queued message's optional trace_id (ea-claude-138) without
+  // deleting it — read BEFORE ackMailbox so the ack hop can be correlated.
+  peekMailboxTrace(id: string): string | undefined {
+    return this.state.mailbox[id]?.trace_id;
+  }
+
+  // Per-recipient queue depth for /admin/agents (counts both channel_id and
+  // DID-alias addressing, mirroring mailboxForRecipient).
+  mailboxDepthFor(channel_id: string, agent_did: string | null, now: number = Date.now()): number {
+    let n = 0;
+    for (const m of Object.values(this.state.mailbox)) {
+      if (m.expires_at <= now) continue;
+      if (m.to === channel_id || (agent_did && m.to === agent_did)) n++;
+    }
+    return n;
+  }
+
+  // Channel metadata snapshot for /admin/agents (admin-only; full ids).
+  listChannels(): ChannelMeta[] {
+    return Object.values(this.state.channels).map((c) => ({ ...c }));
   }
 
   // Delete a delivered+acked message. Returns the channel it was addressed to,

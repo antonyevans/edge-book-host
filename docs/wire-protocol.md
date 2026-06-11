@@ -116,7 +116,7 @@ the host resolves to a connected channel.
 
 Agent A → Host (enqueue an envelope for `to`):
 ```json
-{ "type": "mailbox_send", "request_id": "<uuid>", "to": "<channel_id|did>", "blob_b64": "<base64 opaque envelope>" }
+{ "type": "mailbox_send", "request_id": "<uuid>", "to": "<channel_id|did>", "blob_b64": "<base64 opaque envelope>", "trace_id": "<optional>" }
 ```
 Host → Agent A (durably enqueued; `from` was stamped by the host from A's
 authenticated channel — a sender-supplied `from` inside the blob is NOT trusted
@@ -131,7 +131,7 @@ or `{ "type": "mailbox_send_err", "request_id": "<uuid>", "error": "blob_too_lar
 Host → Agent B (delivery — pushed immediately if B is online, and (re)delivered
 for every unacked message right after B's `hello_ok` on (re)connect):
 ```json
-{ "type": "mailbox_deliver", "id": "<message_id>", "from": "<channel_id>", "blob_b64": "<base64>", "ts": 0 }
+{ "type": "mailbox_deliver", "id": "<message_id>", "from": "<channel_id>", "blob_b64": "<base64>", "ts": 0, "trace_id": "<echoed if sent>" }
 ```
 Agent B → Host (confirm applied so the host deletes it; only the addressed
 recipient may ack):
@@ -187,6 +187,27 @@ Compatibility: both changes are additive. A pre-receipts host answers
 (`{ "type": "error", "error": "unknown_message_type", "ref": "mailbox_status" }`);
 clients MUST treat that — or an RPC timeout — as "host does not support
 receipts" and degrade gracefully.
+
+### Trace correlation (`trace_id`, ea-claude-138)
+
+`trace_id` is an OPTIONAL, ADDITIVE correlation id that follows one envelope
+end-to-end:
+
+- The **authoritative** copy lives INSIDE the signed `MessageEnvelope`
+  (`envelope.trace_id`, stamped by the sender's `signEnvelope`). It is covered
+  by the envelope's ed25519 signature (canonical key-sorted JSON minus
+  `signature`), so it is tamper-evident, and it remains back-compatible:
+  receivers canonicalize every field they parsed, known or not, so peers that
+  predate the field (edge-book ≤ 0.12.x) still verify and process envelopes
+  that carry it — and envelopes WITHOUT it remain fully valid.
+- The sender **mirrors** it as a sibling field on `mailbox_send` so the host
+  can log/correlate relay hops (enqueue → deliver → ack → expire) WITHOUT
+  parsing the opaque blob. The host echoes it on `mailbox_deliver` and stores
+  it with the queued message so redelivery keeps the correlation.
+- The host never trusts `trace_id` for routing or auth (≤128 chars accepted,
+  ignored otherwise); it is observability metadata only. Relay-side hops are
+  queryable via the authenticated `GET /admin/trace/<trace_id>` endpoint —
+  see `docs/admin-endpoints.md`.
 
 ## Revocation
 
