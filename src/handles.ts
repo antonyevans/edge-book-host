@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-export const RESERVED_HANDLES = new Set(["add", "healthz", "metrics", "agent", "api", "handle", "auth"]);
+export const RESERVED_HANDLES = new Set(["add", "healthz", "metrics", "agent", "api", "handle", "auth", "directory"]);
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
 
 export function isValidSlug(handle: string): boolean {
