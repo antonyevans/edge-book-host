@@ -86,3 +86,22 @@ test("GET /handle/:slug still resolves dir-hidden (non-discoverable)", async () 
   const card = await res.json() as { agent_id: string };
   assert.equal(card.agent_id, "did:openclaw:dir-hidden");
 });
+
+test("GET /directory falls back to handle slug when card has no display_name", async () => {
+  const { startServer, store } = await import("./helpers.ts");
+  const { baseUrl } = await startServer();
+
+  store.claimHandle({
+    handle: "dir-noname",
+    agent_did: "did:openclaw:dir-noname",
+    card: { agent_id: "did:openclaw:dir-noname" },  // no display_name field
+    claim_sig: "s",
+  });
+
+  const res = await fetch(`${baseUrl}/directory`);
+  assert.equal(res.status, 200);
+  const data = await res.json() as { handles: Array<{ handle: string; display_name: string }>; total: number };
+  const noname = data.handles.find((h) => h.handle === "dir-noname");
+  assert.ok(noname, "dir-noname should appear in directory");
+  assert.equal(noname.display_name, "dir-noname", "display_name should fall back to the handle slug");
+});
