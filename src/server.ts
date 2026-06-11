@@ -25,6 +25,7 @@ import { RateLimiter } from "./rate-limit.js";
 import { renderReaderHtml } from "./reader-html.js";
 import { renderAddHtml, renderAgentSetupHtml, renderOfflineHtml } from "./reader-landing.js";
 import { renderPairHtml } from "./reader-pair.js";
+import { handleDirectory } from "./http-directory.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -453,22 +454,7 @@ const server = http.createServer(async (req, res) => {
     // No session required — discoverable handles are public. Non-discoverable handles
     // remain resolvable via /handle/:slug but never appear here.
     if (url.pathname === "/directory" && req.method === "GET") {
-      const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") ?? "100", 10) || 100, 1), 500);
-      const offset = Math.max(parseInt(url.searchParams.get("offset") ?? "0", 10) || 0, 0);
-      const { handles, total } = store.listHandles({ offset, limit });
-      const entries = handles.map((rec) => {
-        const card = rec.card as { display_name?: string; owner_label?: string } | null | undefined;
-        const entry: { handle: string; display_name: string; owner_label?: string; claimed_at: number } = {
-          handle: rec.handle,
-          display_name: (typeof card?.display_name === "string" && card.display_name) ? card.display_name : rec.handle,
-          claimed_at: rec.claimed_at,
-        };
-        if (typeof card?.owner_label === "string" && card.owner_label) {
-          entry.owner_label = card.owner_label;
-        }
-        return entry;
-      });
-      sendJson(res, 200, { handles: entries, total });
+      handleDirectory(req, res, url, store, sendJson);
       return;
     }
     if (url.pathname === "/pair") {

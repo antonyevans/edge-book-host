@@ -68,6 +68,7 @@ test("GET /directory pagination: limit + offset", async () => {
   const r1 = await fetch(`${baseUrl}/directory?limit=2&offset=0`);
   const d1 = await r1.json() as { handles: Array<{ handle: string }>; total: number };
   assert.equal(d1.handles.length, 2);
+  // >= because the shared singleton store may have handles from other tests
   assert.ok(d1.total >= 4);
 
   const r2 = await fetch(`${baseUrl}/directory?limit=2&offset=2`);
