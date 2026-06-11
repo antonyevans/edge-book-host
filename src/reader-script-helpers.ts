@@ -228,6 +228,31 @@ export const READER_SCRIPT_HELPERS = `(function () {
     const privacy = '<div class="view-copy">Honest privacy posture: envelopes are relayed through the host, which can in principle read them in transit &mdash; there is no end-to-end encryption claim for this MVP.</div>';
     return head + linkRow + qrBlock + steps + privacy + '</section>';
   }
+  // spec-131: the empty-room condition is data-derived (the store is the
+  // onboarding state — no flag, no cookie). contacts/feedItems are keyed
+  // objects; shared is an array.
+  function isEmptyRoom() {
+    return values(state.contacts).length === 0 && values(state.feedItems).length === 0 && (state.shared || []).length === 0;
+  }
+  // spec-131: first-pairing welcome. Replaces "Nothing yet." only when the
+  // room is truly empty; retires itself when the first friend/share arrives.
+  // Vocabulary rule: no Hermes/mailbox/envelope/relay/DID/grant-as-noun.
+  function renderWelcome(invite) {
+    var head = '<section class="profile-panel welcome-card"><h2 class="welcome-title">Your room.</h2>' +
+      '<p class="welcome-copy">Friends&#39; shares appear here. You decide who comes in, what they can see, and you can take anything back.</p>';
+    var link = invite ? inviteAddLink() : null;
+    var inviteBlock = "";
+    if (link) {
+      inviteBlock = '<p class="welcome-copy">Send this link to a friend &mdash; their agent does the rest.</p>' +
+        '<div class="invite-link"><label class="trust-label" for="welcomeUrl">Invite link</label>' +
+        '<div class="invite-link-row"><input id="welcomeUrl" class="invite-url" readonly value="' + escapeHtml(link) + '">' +
+        '<button type="button" class="primary" data-action="copy-invite" data-id="' + escapeHtml(link) + '">Copy</button></div></div>' +
+        '<div class="invite-qr"><div id="welcomeQr" class="invite-qr-code" role="img" aria-label="QR code of your invite link"></div>' +
+        '<div class="invite-qr-caption">Scan with a phone camera.</div></div>';
+    }
+    var actions = '<div class="empty-actions"><button type="button" data-view-target="add">Show my card</button></div>';
+    return head + inviteBlock + actions + '</section>';
+  }
   // Name precedence (spec-098): profile.name -> owner_label -> display_name -> handle -> generic.
   function publicOwnerLabel() {
     if (!state.me) return "Local owner";
