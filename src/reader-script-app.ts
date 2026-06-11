@@ -76,7 +76,9 @@ export const READER_SCRIPT_APP = `  function render() {
         .map(function (p) {
           return renderEphemeralCard(p) + (p.post_type === "query" ? renderAnswerAnnotations("edgebook:query:" + p.post_id) : "");
         }).join("");
-      html = (signalHtml + ephemeralHtml + feedHtml) || renderFeedEmpty();
+      // spec-131: any rendered signal/ephemeral/feed content suppresses the
+      // welcome by construction; isEmptyRoom() covers the rest.
+      html = (signalHtml + ephemeralHtml + feedHtml) || (isEmptyRoom() ? renderWelcome(state.invite) : renderFeedEmpty());
     }
     if (state.view === "shared") {
       // Each entry is a Contract-2 SharedObject the owner has been GRANTED to
@@ -203,8 +205,10 @@ export const READER_SCRIPT_APP = `  function render() {
     const composer = content.querySelector("form[data-action='post-create']");
     if (composer) composer.addEventListener("submit", createPost);
     // Render the invite QR (client-side, via the vendored qrcode generator).
-    if (state.view === "add") {
-      const qrEl = document.getElementById("inviteQr");
+    // spec-131: shared between the Add-me view and the feed welcome card; the
+    // element-exists guard makes it a no-op when the block was omitted.
+    function populateInviteQr(elementId) {
+      const qrEl = document.getElementById(elementId);
       const link = inviteAddLink();
       if (qrEl && link && typeof window.qrcode === "function") {
         try {
@@ -217,6 +221,8 @@ export const READER_SCRIPT_APP = `  function render() {
         }
       }
     }
+    if (state.view === "add") populateInviteQr("inviteQr");
+    if (state.view === "feed") populateInviteQr("welcomeQr");
   }
   function postJson(path, body) { return api(path, { method: "POST", body: JSON.stringify(body || {}) }); }
   async function runAction(name, id) {
