@@ -529,6 +529,16 @@ export class ChannelRegistry {
     conn.ws.on("close", () => clearInterval(interval));
   }
 
+  // Push an arbitrary frame to the primary open connection for channel_id.
+  // Returns true if sent, false if the channel has no live connection.
+  // Used by server.ts to push pair_complete on code redemption (spec-135).
+  pushFrame(channel_id: string, frame: Record<string, unknown>): boolean {
+    const live = this.resolveLiveChannel(channel_id);
+    if (!live) return false;
+    this.send(live.primary.ws, frame);
+    return true;
+  }
+
   private send(ws: WebSocket, payload: Record<string, unknown>): void {
     try {
       ws.send(JSON.stringify(payload));
