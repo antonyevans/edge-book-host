@@ -449,6 +449,28 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, rec.card);
       return;
     }
+    // Public handle directory (spec-136): paginated list of discoverable handles.
+    // No session required — discoverable handles are public. Non-discoverable handles
+    // remain resolvable via /handle/:slug but never appear here.
+    if (url.pathname === "/directory" && req.method === "GET") {
+      const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") ?? "100", 10) || 100, 1), 500);
+      const offset = Math.max(parseInt(url.searchParams.get("offset") ?? "0", 10) || 0, 0);
+      const { handles, total } = store.listHandles({ offset, limit });
+      const entries = handles.map((rec) => {
+        const card = rec.card as { display_name?: string; owner_label?: string } | null | undefined;
+        const entry: { handle: string; display_name: string; owner_label?: string; claimed_at: number } = {
+          handle: rec.handle,
+          display_name: (typeof card?.display_name === "string" && card.display_name) ? card.display_name : rec.handle,
+          claimed_at: rec.claimed_at,
+        };
+        if (typeof card?.owner_label === "string" && card.owner_label) {
+          entry.owner_label = card.owner_label;
+        }
+        return entry;
+      });
+      sendJson(res, 200, { handles: entries, total });
+      return;
+    }
     if (url.pathname === "/pair") {
       await handlePair(req, res, url);
       return;
