@@ -209,6 +209,36 @@ end-to-end:
   queryable via the authenticated `GET /admin/trace/<trace_id>` endpoint —
   see `docs/admin-endpoints.md`.
 
+### Support mailbox (`SUPPORT_DID`, spec-134)
+
+The operator can run an ordinary Edge Book agent as a **support mailbox**
+(`edge-book support inbox --on` on that agent) and announce its DID to the
+host via the `SUPPORT_DID` env var (set as a Fly secret; read per use, so
+rotation needs no redeploy). `edge-book doctor --send` then:
+
+1. discovers the recipient with `GET /support/recipient` (PUBLIC, no auth) —
+   `{ "ok": true, "did": "<SUPPORT_DID>" }`, or **404 when `SUPPORT_DID` is
+   unset** (fail closed, indistinguishable from an unknown route);
+2. sends a NORMAL `mailbox_send` addressed to that DID, carrying an opaque
+   `support_bundle` envelope. No new frame types.
+
+The host still never parses the blob. For frames whose `to` equals
+`SUPPORT_DID` it applies two extra **frame-level** guards (src/support.ts):
+
+- size: blob > **256 KiB** → `mailbox_send_err` `"support_bundle_too_large"`
+  (support bundles are sanitized doctor reports, tens of KiB; the generic
+  8 MiB mailbox cap still governs all other traffic);
+- rate: more than **5 support sends per sender channel per hour** →
+  `mailbox_send_err` `"support_rate_limited"` (in-memory fixed window,
+  single-machine, cleared on restart). Rejections emit a
+  `support_send_reject` structured log line.
+
+Everything else is the standard mailbox contract: store-and-forward,
+at-least-once, ack-to-delete, `trace_id` correlation. The envelope's
+`trace_id` is the user's **support reference**; the operator correlates it
+relay-side via `GET /admin/trace/<trace_id>` and reads the bundle on their
+support agent with `edge-book support pending` / `support read <id>`.
+
 ## Revocation
 
 Agent → Host (when the human runs `sessions revoke` on the agent):

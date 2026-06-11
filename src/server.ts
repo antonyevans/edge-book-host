@@ -3,7 +3,8 @@
 //
 // Trust boundaries (every route falls in exactly one):
 //   PUBLIC (no auth): GET / (landing|reader shell), /pair (rate-limited form),
-//     /agent-setup, /add, /handle/:handle (registry resolve), /health, /healthz, /metrics.
+//     /agent-setup, /add, /handle/:handle (registry resolve), /health, /healthz, /metrics,
+//     /support/recipient (404 unless SUPPORT_DID is set — spec-134, src/support.ts).
 //   ADMIN (Bearer ADMIN_TOKEN, fail-closed 404 when unset): /admin/agents,
 //     /admin/trace/:trace_id — see src/admin.ts (ea-claude-138).
 //   SESSION + CSRF: /auth/* and every /api/* proxy call — session cookie
@@ -31,6 +32,7 @@ import { renderAddHtml, renderAgentSetupHtml, renderOfflineHtml } from "./reader
 import { renderDirectoryHtml } from "./reader-directory.js";
 import { renderPairHtml } from "./reader-pair.js";
 import { handleDirectory } from "./http-directory.js";
+import { handleSupportRecipientRoute, isSupportRecipientRequest } from "./support.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -415,6 +417,9 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { status: "ok" });
       return;
     }
+    // Support-mailbox discovery (spec-134): which agent DID receives
+    // `doctor --send` bundles. Fail-closed 404 when SUPPORT_DID is unset.
+    if (isSupportRecipientRequest(req, url)) { setSecurityHeaders(res); handleSupportRecipientRoute(res); return; }
     if (url.pathname === "/metrics") {
       const m = channels.metrics();
       sendJson(res, 200, {
