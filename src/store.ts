@@ -232,8 +232,12 @@ export class HostStore {
   }
 
   // Read one queued message in its host-internal shape (mailbox_status lookups).
-  getMailboxMessage(id: string): StoredMailboxMessage | null {
-    return this.state.mailbox[id] ?? null;
+  // Expired-but-unswept messages are treated as gone (spec-097: "unknown"
+  // includes expired) so status never outlives the TTL by purge cadence.
+  getMailboxMessage(id: string, now = Date.now()): StoredMailboxMessage | null {
+    const m = this.state.mailbox[id];
+    if (!m || m.expires_at <= now) return null;
+    return m;
   }
 
   getReceipt(id: string): ReceiptEntry | null {
