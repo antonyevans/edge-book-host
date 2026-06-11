@@ -90,3 +90,224 @@ test("receipts ledger cap: insert over 10_000 evicts the oldest by acked_at", ()
   assert.equal(store.getReceipt("m0"), null, "oldest entry evicted");
   assert.ok(store.getReceipt("m10000"), "newest entry present");
 });
+
+// ── spec-097 Part 2: wire-level tests (TestAgent pattern, mailbox.test.ts) ───
+import { WebSocket } from "ws";
+import { startServer, store } from "./helpers.js";
+
+let serverCtx: Awaited<ReturnType<typeof startServer>> | null = null;
+test.before(async () => { serverCtx = await startServer(); });
+after(async () => { if (serverCtx) await serverCtx.close(); });
+
+const KEY_A = "ed25519:receipts-A-fixed";
+const KEY_B = "ed25519:receipts-B-fixed";
+const KEY_C = "ed25519:receipts-C-fixed";
+
+interface StatusEntry { id: string; state: string; queued_ms?: number; recipient_live?: boolean }
+interface SendAck { id: string; recipient_live?: boolean }
+
+// mailbox.test.ts TestAgent extended for spec-097: captures recipient_live on
+// send acks and speaks the mailbox_status RPC pair.
+class ReceiptAgent {
+  ws: WebSocket;
+  channel_id = "";
+  delivers: Array<{ id: string }> = [];
+  sendAcks = new Map<string, SendAck>();
+  sendErrs = new Map<string, string>();
+  statusOks = new Map<string, StatusEntry[]>();
+  statusErrs = new Map<string, string>();
+  private waiters: Array<() => void> = [];
+
+  private constructor(ws: WebSocket) { this.ws = ws; }
+
+  static async connect(wsUrl: string, agent_key: string, agent_did?: string): Promise<ReceiptAgent> {
+    const ws = new WebSocket(wsUrl);
+    const agent = new ReceiptAgent(ws);
+    await new Promise<void>((resolve, reject) => {
+      ws.on("message", (raw) => {
+        const f = JSON.parse(raw.toString()) as Record<string, unknown>;
+        switch (f.type) {
+          case "hello_ok":
+            agent.channel_id = String(f.channel_id);
+            resolve();
+            break;
+          case "hello_err":
+            reject(new Error(String(f.error || "hello_failed")));
+            break;
+          case "ping":
+            ws.send(JSON.stringify({ type: "pong" }));
+            break;
+          case "mailbox_deliver":
+            agent.delivers.push({ id: String(f.id) });
+            agent.wake();
+            break;
+          case "mailbox_send_ok":
+            agent.sendAcks.set(String(f.request_id), {
+              id: String(f.id),
+              recipient_live: typeof f.recipient_live === "boolean" ? f.recipient_live : undefined
+            });
+            agent.wake();
+            break;
+          case "mailbox_send_err":
+            agent.sendErrs.set(String(f.request_id), String(f.error));
+            agent.wake();
+            break;
+          case "mailbox_status_ok":
+            agent.statusOks.set(String(f.request_id), f.statuses as StatusEntry[]);
+            agent.wake();
+            break;
+          case "mailbox_status_err":
+            agent.statusErrs.set(String(f.request_id), String(f.error));
+            agent.wake();
+            break;
+        }
+      });
+      ws.once("open", () => {
+        const hello: Record<string, unknown> = { type: "hello", agent_key, version: "test", nonce: "n" };
+        if (agent_did) hello.agent_did = agent_did;
+        ws.send(JSON.stringify(hello));
+      });
+      ws.once("error", reject);
+    });
+    return agent;
+  }
+
+  private wake(): void { this.waiters.splice(0).forEach((w) => w()); }
+
+  private async until(cond: () => boolean, what: string, timeoutMs = 2000): Promise<void> {
+    const start = Date.now();
+    while (!cond()) {
+      if (Date.now() - start > timeoutMs) throw new Error(`timeout waiting for ${what}`);
+      await new Promise<void>((r) => { this.waiters.push(r); setTimeout(r, 25); });
+    }
+  }
+
+  async sendMailbox(to: string, plaintext: string, request_id: string): Promise<SendAck> {
+    this.ws.send(JSON.stringify({ type: "mailbox_send", request_id, to, blob_b64: Buffer.from(plaintext, "utf8").toString("base64") }));
+    await this.until(() => this.sendAcks.has(request_id) || this.sendErrs.has(request_id), `send_ok ${request_id}`);
+    const err = this.sendErrs.get(request_id);
+    if (err) throw new Error(err);
+    return this.sendAcks.get(request_id)!;
+  }
+
+  async status(ids: string[], request_id: string): Promise<StatusEntry[]> {
+    this.ws.send(JSON.stringify({ type: "mailbox_status", request_id, ids }));
+    await this.until(() => this.statusOks.has(request_id) || this.statusErrs.has(request_id), `status_ok ${request_id}`);
+    const err = this.statusErrs.get(request_id);
+    if (err) throw new Error(err);
+    return this.statusOks.get(request_id)!;
+  }
+
+  async waitDelivers(n: number): Promise<void> { await this.until(() => this.delivers.length >= n, `${n} delivers`); }
+  ack(id: string): void { this.ws.send(JSON.stringify({ type: "mailbox_ack", id })); }
+  close(): void { this.ws.close(); }
+}
+
+test("mailbox_send_ok reports recipient_live=false for an offline recipient, true for an online one", async () => {
+  const { wsUrl } = await startServer();
+  // B connects once to register its channel, then goes offline.
+  const b1 = await ReceiptAgent.connect(wsUrl, KEY_B);
+  const channelB = b1.channel_id;
+  b1.close();
+  await new Promise((r) => setTimeout(r, 50));
+
+  const a = await ReceiptAgent.connect(wsUrl, KEY_A);
+  const offlineAck = await a.sendMailbox(channelB, "to-offline-B", "rl-1");
+  assert.equal(offlineAck.recipient_live, false, "B is offline at enqueue time");
+
+  const c = await ReceiptAgent.connect(wsUrl, KEY_C);
+  const onlineAck = await a.sendMailbox(c.channel_id, "to-online-C", "rl-2");
+  assert.equal(onlineAck.recipient_live, true, "C is connected at enqueue time");
+
+  a.close(); c.close();
+});
+
+// ── KEYSTONE EXTENDED (spec-097): offline → status=queued → reconnect+deliver
+// → status=delivered → ack → status=acked + unknown for a random id ──────────
+test("receipts keystone: sender's mailbox_status tracks queued → delivered → acked", async () => {
+  const { wsUrl } = await startServer();
+  const b1 = await ReceiptAgent.connect(wsUrl, KEY_B);
+  const channelB = b1.channel_id;
+  b1.close();
+  await new Promise((r) => setTimeout(r, 50));
+
+  const a = await ReceiptAgent.connect(wsUrl, KEY_A);
+  const ack = await a.sendMailbox(channelB, "receipts-keystone", "rk-1");
+
+  // queued: in the mailbox, never pushed.
+  const s1 = await a.status([ack.id], "rk-st1");
+  assert.equal(s1[0]!.state, "queued");
+  assert.ok(s1[0]!.queued_ms! >= 0, "queued_ms present and non-negative");
+  assert.equal(s1[0]!.recipient_live, false);
+
+  // delivered: B reconnects → host pushes → no ack yet.
+  const b2 = await ReceiptAgent.connect(wsUrl, KEY_B);
+  await b2.waitDelivers(1);
+  const s2 = await a.status([ack.id], "rk-st2");
+  assert.equal(s2[0]!.state, "delivered");
+  assert.ok(s2[0]!.queued_ms! >= 0);
+  assert.equal(s2[0]!.recipient_live, true);
+
+  // acked: gone from the mailbox, present in the ledger; optional fields omitted.
+  b2.ack(ack.id);
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(store.getMailboxMessage(ack.id), null, "acked message deleted from the mailbox");
+  assert.ok(store.getReceipt(ack.id), "receipt recorded in the ledger");
+  const s3 = await a.status([ack.id, "no-such-message-id"], "rk-st3");
+  assert.equal(s3[0]!.state, "acked");
+  assert.ok(!("queued_ms" in s3[0]!), "acked omits queued_ms (key absent, not null)");
+  assert.ok(!("recipient_live" in s3[0]!), "acked omits recipient_live");
+  assert.equal(s3[1]!.state, "unknown");
+  assert.ok(!("queued_ms" in s3[1]!), "unknown omits queued_ms");
+
+  a.close(); b2.close();
+});
+
+test("authorization fails closed: third agent AND the recipient both see unknown", async () => {
+  const { wsUrl } = await startServer();
+  const b1 = await ReceiptAgent.connect(wsUrl, KEY_B);
+  const channelB = b1.channel_id;
+  b1.close();
+  await new Promise((r) => setTimeout(r, 50));
+
+  const a = await ReceiptAgent.connect(wsUrl, KEY_A);
+  const ack = await a.sendMailbox(channelB, "auth-probe", "auth-1");
+
+  // Third agent C probing someone else's id learns nothing.
+  const c = await ReceiptAgent.connect(wsUrl, KEY_C);
+  const sc = await c.status([ack.id], "auth-st-c");
+  assert.equal(sc[0]!.state, "unknown", "third party gets unknown, not the real state");
+
+  // The RECIPIENT (non-sender) also gets unknown — only from === channel_id may read.
+  const b2 = await ReceiptAgent.connect(wsUrl, KEY_B);
+  await b2.waitDelivers(1); // delivered but NOT acked — still in the mailbox
+  const sb = await b2.status([ack.id], "auth-st-b");
+  assert.equal(sb[0]!.state, "unknown", "recipient gets unknown");
+
+  // The sender still sees the truth.
+  const sa = await a.status([ack.id], "auth-st-a");
+  assert.equal(sa[0]!.state, "delivered");
+
+  a.close(); b2.close(); c.close();
+});
+
+test("mailbox_status rejects malformed frames: missing ids, empty ids, >50 ids", async () => {
+  const { wsUrl } = await startServer();
+  const a = await ReceiptAgent.connect(wsUrl, KEY_A);
+
+  a.ws.send(JSON.stringify({ type: "mailbox_status", request_id: "mf-1" })); // no ids
+  a.ws.send(JSON.stringify({ type: "mailbox_status", request_id: "mf-2", ids: [] }));
+  a.ws.send(JSON.stringify({ type: "mailbox_status", request_id: "mf-3", ids: Array.from({ length: 51 }, (_, i) => `x${i}`) }));
+  const deadline = Date.now() + 2000;
+  while (a.statusErrs.size < 3 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 20));
+  assert.equal(a.statusErrs.get("mf-1"), "invalid_mailbox_status");
+  assert.equal(a.statusErrs.get("mf-2"), "invalid_mailbox_status");
+  assert.equal(a.statusErrs.get("mf-3"), "invalid_mailbox_status");
+
+  // Exactly 50 ids is accepted (bound is ≤50).
+  const s = await a.status(Array.from({ length: 50 }, (_, i) => `x${i}`), "mf-4");
+  assert.equal(s.length, 50);
+  assert.ok(s.every((e) => e.state === "unknown"));
+
+  a.close();
+});
