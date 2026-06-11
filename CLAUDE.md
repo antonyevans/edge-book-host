@@ -15,21 +15,23 @@ shared (by spec, not by import) with the `edge-book-cli` repo.
 
 ## Verification commands (spec-0042 — run before claiming done)
 
-All non-interactive with meaningful exit codes. A completion claim names the
-command(s) run and their observed output — "done" without evidence is not done.
+All three non-interactive with meaningful exit codes. A completion claim names
+the command(s) run and their observed output — "done" without evidence is not
+done.
 
 ```bash
-npx eslint src          # lint — size/style gates, must be clean
+npx eslint src          # lint — no errors (pre-existing warnings tolerated)
 npx tsc -p . --noEmit   # typecheck (strict) — must stay clean
 npm test                # full suite via tsx --test — must stay green
-npm run build && npm start   # production build + boot smoke
-npm run dev             # local server (tsx watch src/server.ts) — dev only
 ```
 
+Boot smoke (long-running — start, confirm the listen line, then kill):
+`npm run build && npm start`. Local dev server: `npm run dev`.
 Manual two-machine smoke: `docs/two-machine-smoke.md`.
 
-CI (`deploy.yml`) runs lint → typecheck → tests on every push and PR; merging
-on red is prohibited.
+CI (`deploy.yml`) runs lint → typecheck → tests on every PR and on push to
+main (doc/vendor-only changes are skipped via paths-ignore); merging on red
+is prohibited.
 
 ## Workflow (spec-0041 / spec-0042)
 
