@@ -72,6 +72,9 @@ curl -H "Authorization: Bearer $ADMIN_TOKEN" https://<host>/admin/trace/trace_ab
 
 - Hops: `enqueue` → `deliver` (one per delivery attempt, including
   redelivery-on-reconnect) → `ack`, plus `expire` for TTL purges.
+- The "support reference" printed by `edge-book doctor --send` (spec-134) is a
+  trace_id — paste it here to see whether the user's bundle reached the
+  support mailbox.
 - Backed by a bounded in-memory ring (1000 hops); restart clears it. Unknown
   trace ids return `hops: []` (200).
 
