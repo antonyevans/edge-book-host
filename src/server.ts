@@ -289,6 +289,13 @@ async function handlePair(req: http.IncomingMessage, res: http.ServerResponse, u
   }
   // Successful pair — clear this IP's failure budget so it never accumulates.
   pairLimiter.reset(ip);
+  // spec-135: signal the paired agent that a human browser just connected.
+  // Drops silently when the agent has no live socket at redemption time.
+  channels.pushFrame(channel_id, {
+    type: "pair_complete",
+    device_id: channel_id,
+    label: deviceLabel(req.headers["user-agent"]),
+  });
   // Human activity — resets the idle-timeout clock for this channel (ea-061).
   store.touchChannelActivity(channel_id);
   // Bind a session.
