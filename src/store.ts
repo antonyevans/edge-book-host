@@ -288,7 +288,7 @@ export class HostStore {
       .sort((a, b) => a.claimed_at - b.claimed_at);
     const total = all.length;
     const offset = opts.offset ?? 0;
-    const limit = Math.min(opts.limit ?? 100, 500);
+    const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
     return { handles: all.slice(offset, offset + limit), total };
   }
 

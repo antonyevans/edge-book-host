@@ -117,6 +117,7 @@ test("listHandles paginates correctly", () => {
   assert.equal(page1.handles.length, 2);
   assert.equal(page2.handles.length, 2);
   assert.equal(page1.total, 5);
+  assert.equal(page2.total, 5);
   // No overlap between pages.
   const p1slugs = new Set(page1.handles.map((h) => h.handle));
   assert.ok(!page2.handles.some((h) => p1slugs.has(h.handle)));
