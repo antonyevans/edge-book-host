@@ -14,6 +14,12 @@ import fs from "node:fs";
 import path from "node:path";
 import type { MailboxMessage } from "./contracts.js";
 
+// Receipts ledger bounds (spec-097): acked entries expire after the TTL
+// (purged by the existing purge() sweep) and the ledger is capped at insert
+// time — Record carries no order, so eviction sorts by acked_at.
+const RECEIPT_TTL_MS = Number(process.env.EDGE_BOOK_RECEIPT_TTL_MS) || 7 * 24 * 60 * 60 * 1000;
+const RECEIPT_CAP = Number(process.env.EDGE_BOOK_RECEIPT_CAP) || 10_000;
+
 export interface PairingCode {
   code: string;
   channel_id: string;
@@ -64,6 +70,10 @@ export interface ChannelMeta {
 // host-internal TTL for purge and is NOT part of the wire MailboxMessage.
 export interface StoredMailboxMessage extends MailboxMessage {
   expires_at: number;
+  // Epoch ms of the FIRST mailbox_deliver push (spec-097). Absent = never
+  // pushed to a live socket. Host-internal — stripped from wire shapes
+  // alongside expires_at. At-least-once redelivery keeps the first stamp.
+  delivered_at?: number;
 }
 
 export interface HandleRecord {
@@ -72,6 +82,14 @@ export interface HandleRecord {
   card: unknown;          // the full signed AgentCard (opaque to the host)
   claimed_at: number;
   claim_sig: string;
+}
+
+// What survives an ack (spec-097): enough for the SENDER (`from` is the
+// channel_id the host stamped at enqueue) to learn "acked", nothing more.
+export interface ReceiptEntry {
+  acked_at: number;
+  to: string;
+  from: string;
 }
 
 interface State {
@@ -83,6 +101,8 @@ interface State {
   mailbox: Record<string, StoredMailboxMessage>;
   // Handle registry keyed by slug (spec-096). Survives restart.
   handles: Record<string, HandleRecord>;
+  // Receipts ledger keyed by mailbox message id (spec-097). Survives restart.
+  receipts: Record<string, ReceiptEntry>;
 }
 
 const EMPTY: State = {
@@ -91,7 +111,8 @@ const EMPTY: State = {
   device_tokens: {},
   channels: {},
   mailbox: {},
-  handles: {}
+  handles: {},
+  receipts: {}
 };
 
 export class HostStore {
@@ -116,7 +137,8 @@ export class HostStore {
         device_tokens: parsed.device_tokens || {},
         channels: parsed.channels || {},
         mailbox: parsed.mailbox || {},
-        handles: parsed.handles || {}
+        handles: parsed.handles || {},
+        receipts: parsed.receipts || {}
       };
     } catch {
       return structuredClone(EMPTY);
@@ -150,6 +172,9 @@ export class HostStore {
     for (const [k, v] of Object.entries(this.state.mailbox)) {
       if (v.expires_at <= now) delete this.state.mailbox[k];
     }
+    for (const [k, v] of Object.entries(this.state.receipts)) {
+      if (v.acked_at + RECEIPT_TTL_MS <= now) delete this.state.receipts[k];
+    }
     this.scheduleFlush();
   }
 
@@ -172,8 +197,8 @@ export class HostStore {
       if (m.to === channel_id || (agent_did && m.to === agent_did)) out.push(m);
     }
     out.sort((a, b) => a.ts - b.ts);
-    // Strip the host-internal expires_at — the wire shape is {id,to,from,blob,ts}.
-    return out.map(({ expires_at: _omit, ...wire }) => wire);
+    // Strip the host-internal fields — the wire shape is {id,to,from,blob,ts}.
+    return out.map(({ expires_at: _omit, delivered_at: _omit2, ...wire }) => wire);
   }
 
   // Peek a queued message's recipient (`to`) without deleting it.
@@ -182,13 +207,57 @@ export class HostStore {
   }
 
   // Delete a delivered+acked message. Returns the channel it was addressed to,
-  // or null if unknown (idempotent — a duplicate ack is a no-op).
-  ackMailbox(id: string): string | null {
+  // or null if unknown (idempotent — a duplicate ack is a no-op). Records the
+  // receipt BEFORE the delete (spec-097) so the sender can still see "acked".
+  // Caller (channels.ts mailbox_ack) has already verified the acker is the
+  // addressed recipient — this method assumes an authorized ack.
+  ackMailbox(id: string, now: number = Date.now()): string | null {
     const m = this.state.mailbox[id];
     if (!m) return null;
+    this.state.receipts[id] = { acked_at: now, to: m.to, from: m.from };
+    this.enforceReceiptCap();
     delete this.state.mailbox[id];
     this.scheduleFlush();
     return m.to;
+  }
+
+  // Stamp the FIRST delivery push (spec-097). First write wins — redelivery on
+  // reconnect must not move the timestamp. Writes state.mailbox[id] directly
+  // because mailboxForRecipient returns stripped wire copies.
+  markDelivered(id: string, now: number = Date.now()): void {
+    const m = this.state.mailbox[id];
+    if (!m || m.delivered_at !== undefined) return;
+    m.delivered_at = now;
+    this.scheduleFlush();
+  }
+
+  // Read one queued message in its host-internal shape (mailbox_status lookups).
+  // Expired-but-unswept messages are treated as gone (spec-097: "unknown"
+  // includes expired) so status never outlives the TTL by purge cadence.
+  getMailboxMessage(id: string, now = Date.now()): StoredMailboxMessage | null {
+    const m = this.state.mailbox[id];
+    if (!m || m.expires_at <= now) return null;
+    return m;
+  }
+
+  getReceipt(id: string): ReceiptEntry | null {
+    return this.state.receipts[id] ?? null;
+  }
+
+  receiptsCount(): number {
+    return Object.keys(this.state.receipts).length;
+  }
+
+  // Cap enforcement at insert time (spec-097 §A.2): when over cap, sort by
+  // acked_at ascending and delete oldest until at cap.
+  private enforceReceiptCap(): void {
+    if (Object.keys(this.state.receipts).length <= RECEIPT_CAP) return;
+    const entries = Object.entries(this.state.receipts);
+    entries.sort((a, b) => a[1].acked_at - b[1].acked_at);
+    for (let i = 0; i < entries.length - RECEIPT_CAP; i++) {
+      const entry = entries[i];
+      if (entry) delete this.state.receipts[entry[0]];
+    }
   }
 
   // For tests / inspection.

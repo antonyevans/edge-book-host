@@ -25,6 +25,8 @@ const MAX_CONNECTIONS_PER_CHANNEL = 4;
 // queued envelopes live this long before purge (matches the 7d idle window).
 const MAX_BLOB_BYTES = 8 * 1024 * 1024;
 const MAILBOX_TTL_MS = Number(process.env.EDGE_BOOK_MAILBOX_TTL_MS) || 7 * 24 * 60 * 60 * 1000;
+// mailbox_status accepts at most this many ids per request (spec-097 §B.2).
+const MAX_STATUS_IDS = 50;
 
 // Short, non-sensitive channel handle for logs (sha256 prefix; never the key).
 function cref(channel_id: string): string {
@@ -78,6 +80,7 @@ interface Channel {
 export interface ChannelMetrics {
   connected_channels: number;
   mailbox_queue_depth: number;
+  receipts_ledger_size: number;
   deliveries: {
     enqueued: number;
     delivered: number;
@@ -105,6 +108,7 @@ export class ChannelRegistry {
     return {
       connected_channels: this.liveChannelCount(),
       mailbox_queue_depth: this.store.mailboxCount(),
+      receipts_ledger_size: this.store.receiptsCount(),
       deliveries: { ...this.counters },
     };
   }
@@ -315,7 +319,10 @@ export class ChannelRegistry {
       this.store.enqueueMailbox(msg, MAILBOX_TTL_MS);
       logEvent("mailbox_enqueue", { id, to: cref(to), from: cref(channel.channel_id) });
       this.counters.enqueued++;
-      this.send(ws, { type: "mailbox_send_ok", request_id, id });
+      // Liveness answer (spec-097 §B.1, normative ordering): computed BEFORE
+      // the ack is sent — deliverQueued below would race it otherwise.
+      const recipient_live = this.resolveLiveChannel(to) !== undefined;
+      this.send(ws, { type: "mailbox_send_ok", request_id, id, recipient_live });
       // Best-effort immediate delivery if the recipient is online. At-least-once
       // either way: the message stays queued until the recipient acks.
       this.deliverQueued(to);
@@ -339,6 +346,36 @@ export class ChannelRegistry {
         logEvent("mailbox_ack", { id, to: cref(deleted) });
         this.counters.acked++;
       }
+      return;
+    }
+    // Mailbox status (spec-097): the SENDER asks for per-message delivery state.
+    // Fail closed: an id is reported only when the requesting channel's
+    // channel_id equals the stored `from` (host-stamped at enqueue — never a
+    // DID) — anyone else sees "unknown"; probing reveals nothing. For acked/
+    // unknown, queued_ms and recipient_live are OMITTED (not null).
+    if (type === "mailbox_status") {
+      const request_id = String(frame.request_id || "");
+      const ids = frame.ids;
+      if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_STATUS_IDS || !ids.every((i) => typeof i === "string")) {
+        this.send(ws, { type: "mailbox_status_err", request_id, error: "invalid_mailbox_status" });
+        return;
+      }
+      const now = Date.now();
+      const statuses = (ids as string[]).map((id) => {
+        const queued = this.store.getMailboxMessage(id);
+        if (queued && queued.from === channel.channel_id) {
+          return {
+            id,
+            state: queued.delivered_at === undefined ? "queued" : "delivered",
+            queued_ms: Math.max(0, now - queued.ts),
+            recipient_live: this.resolveLiveChannel(queued.to) !== undefined
+          };
+        }
+        const receipt = this.store.getReceipt(id);
+        if (receipt && receipt.from === channel.channel_id) return { id, state: "acked" };
+        return { id, state: "unknown" };
+      });
+      this.send(ws, { type: "mailbox_status_ok", request_id, statuses });
       return;
     }
     // Handle claim (spec-096): the agent claims a human-friendly handle, backed
@@ -394,21 +431,16 @@ export class ChannelRegistry {
   // messages stay queued and are redelivered on the recipient's next connect.
   // At-least-once: a message is deleted only when the recipient acks it.
   deliverQueued(recipient: string): number {
-    // Resolve the recipient to a live channel: try direct channel_id, else find
-    // a connected channel whose DID alias matches.
-    let channel = this.channels.get(recipient);
-    if (!channel) {
-      for (const c of this.channels.values()) {
-        if (c.agent_did === recipient) { channel = c; break; }
-      }
-    }
-    if (!channel) return 0;
-    const primary = this.primaryConn(channel.channel_id);
-    if (!primary) return 0;
+    const live = this.resolveLiveChannel(recipient);
+    if (!live) return 0;
+    const { channel, primary } = live;
     const queued = this.store.mailboxForRecipient(channel.channel_id, channel.agent_did);
     let sent = 0;
     for (const m of queued) {
       this.send(primary.ws, { type: "mailbox_deliver", id: m.id, from: m.from, blob_b64: m.blob, ts: m.ts });
+      // Stamp the FIRST push (spec-097): "delivered" = written to a live socket
+      // at least once. Redelivery keeps the first stamp (markDelivered no-ops).
+      this.store.markDelivered(m.id);
       sent++;
     }
     if (sent) {
@@ -422,6 +454,24 @@ export class ChannelRegistry {
   // arrived while this channel was offline.
   flushMailbox(channel_id: string): number {
     return this.deliverQueued(channel_id);
+  }
+
+  // Resolve a recipient address (channel_id or DID alias) to a live channel
+  // with an OPEN primary connection. Reads the in-memory `channels` Map — the
+  // only place liveness exists (the store has no liveness concept). Shared by
+  // the mailbox_send liveness answer, mailbox_status, and deliverQueued
+  // (spec-097). Read-only.
+  private resolveLiveChannel(recipient: string): { channel: Channel; primary: Connection } | undefined {
+    let channel = this.channels.get(recipient);
+    if (!channel) {
+      for (const c of this.channels.values()) {
+        if (c.agent_did === recipient) { channel = c; break; }
+      }
+    }
+    if (!channel) return undefined;
+    const primary = this.primaryConn(channel.channel_id);
+    if (!primary) return undefined;
+    return { channel, primary };
   }
 
   // Most-recently-attached OPEN connection on a channel, if any.
