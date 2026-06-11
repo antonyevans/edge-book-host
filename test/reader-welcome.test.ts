@@ -4,6 +4,15 @@ import { renderReaderHtml } from "../src/reader-html.js";
 
 const html = renderReaderHtml({ csrf_token: "t", agent_online: true });
 
+// Slice from the start of renderWelcome to the next function declaration, so
+// the window tracks the actual function body without bleeding into neighbors.
+function renderWelcomeBody(): string {
+  const start = html.indexOf("function renderWelcome");
+  assert.notEqual(start, -1, "renderWelcome not found in reader html");
+  const next = html.indexOf("function ", start + "function renderWelcome".length);
+  return next === -1 ? html.slice(start) : html.slice(start, next);
+}
+
 test("feed fallback routes empty room to renderWelcome, else renderFeedEmpty", () => {
   assert.match(html, /isEmptyRoom\(\) \? renderWelcome\(state\.invite\) : renderFeedEmpty\(\)/);
 });
@@ -31,7 +40,7 @@ test("welcome card has its own QR element id and a Show my card button", () => {
 
 test("renderWelcome takes invite as arg and degrades without it", () => {
   assert.match(html, /function renderWelcome\(invite\)/);
-  const fn = html.slice(html.indexOf("function renderWelcome"), html.indexOf("function renderWelcome") + 1600);
+  const fn = renderWelcomeBody();
   assert.match(fn, /if \(link\)/);
   assert.match(fn, /Send this link to a friend/);
 });
@@ -43,8 +52,7 @@ test("welcome QR population reuses one helper for both views", () => {
 });
 
 test("welcome copy contains no banned vocabulary", () => {
-  const start = html.indexOf("function renderWelcome");
-  const fn = html.slice(start, start + 1600);
+  const fn = renderWelcomeBody();
   for (const word of ["Hermes", "mailbox", "envelope", "relay", "DID"]) {
     assert.ok(!fn.includes(word), `banned word in welcome copy: ${word}`);
   }

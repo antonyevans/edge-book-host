@@ -244,7 +244,8 @@ export const READER_SCRIPT_HELPERS = `(function () {
     var inviteBlock = "";
     if (link) {
       inviteBlock = '<p class="welcome-copy">Send this link to a friend &mdash; their agent does the rest.</p>' +
-        '<div class="invite-link"><div class="invite-link-row"><input id="welcomeUrl" class="invite-url" readonly value="' + escapeHtml(link) + '">' +
+        '<div class="invite-link"><label class="trust-label" for="welcomeUrl">Invite link</label>' +
+        '<div class="invite-link-row"><input id="welcomeUrl" class="invite-url" readonly value="' + escapeHtml(link) + '">' +
         '<button type="button" class="primary" data-action="copy-invite" data-id="' + escapeHtml(link) + '">Copy</button></div></div>' +
         '<div class="invite-qr"><div id="welcomeQr" class="invite-qr-code" role="img" aria-label="QR code of your invite link"></div>' +
         '<div class="invite-qr-caption">Scan with a phone camera.</div></div>';
