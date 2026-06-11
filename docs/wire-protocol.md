@@ -102,9 +102,11 @@ Agent A → Host (enqueue an envelope for `to`):
 ```
 Host → Agent A (durably enqueued; `from` was stamped by the host from A's
 authenticated channel — a sender-supplied `from` inside the blob is NOT trusted
-over it):
+over it). `recipient_live` (spec-097) reports whether, at enqueue time, any
+live channel claimed `to`; it is an enqueue-time snapshot, not a delivery
+guarantee. Old hosts omit the field; old clients ignore it:
 ```json
-{ "type": "mailbox_send_ok", "request_id": "<uuid>", "id": "<message_id>" }
+{ "type": "mailbox_send_ok", "request_id": "<uuid>", "id": "<message_id>", "recipient_live": false }
 ```
 or `{ "type": "mailbox_send_err", "request_id": "<uuid>", "error": "blob_too_large" | "invalid_mailbox_send" }`.
 
@@ -123,6 +125,50 @@ Semantics: **at-least-once.** The queue persists across host restart and agent
 reconnect; a message is deleted only on ack. Recipients MUST dedupe by the inner
 envelope's `message_id`. Caps: opaque blob ≤ 8 MiB; queued envelopes are purged
 after `EDGE_BOOK_MAILBOX_TTL_MS` (default 7 days).
+
+## Delivery receipts (spec-097)
+
+Per-message delivery state for the SENDER. Modeled on the `sessions_list`
+request/response pair (correlated by `request_id`).
+
+Agent → Host (≤ 50 ids per request):
+```json
+{ "type": "mailbox_status", "request_id": "<uuid>", "ids": ["<message_id>", "..."] }
+```
+Host → Agent:
+```json
+{ "type": "mailbox_status_ok", "request_id": "<uuid>", "statuses": [
+  { "id": "...", "state": "queued",    "queued_ms": 0, "recipient_live": false },
+  { "id": "...", "state": "delivered", "queued_ms": 0, "recipient_live": true },
+  { "id": "...", "state": "acked" },
+  { "id": "...", "state": "unknown" }
+] }
+```
+or `{ "type": "mailbox_status_err", "request_id": "<uuid>", "error": "invalid_mailbox_status" }`
+for a malformed frame (missing/empty/over-limit/non-string `ids`).
+
+States: `queued` = in the mailbox, never pushed to a live socket. `delivered` =
+pushed at least once but not acked (the push may have been lost — at-least-once
+semantics, redelivery on reconnect still applies). `acked` = the recipient
+acked; the message is deleted but a receipt survives in a bounded ledger
+(`EDGE_BOOK_RECEIPT_TTL_MS`, default 7 days; cap `EDGE_BOOK_RECEIPT_CAP`,
+default 10 000, oldest-evicted). `unknown` = neither (expired, evicted, never
+existed — or not yours, see below). For `acked`/`unknown`, `queued_ms` and
+`recipient_live` are ABSENT (key omitted, not null).
+
+Authorization (fail closed): a status entry is returned only when the
+requesting channel's `channel_id` equals the message's host-stamped `from`.
+Anyone else — including the addressed recipient — gets `unknown` for that id;
+probing reveals nothing. Known accepted limit: rotating the transport key
+(`host-dialout-key.json`) changes the channel_id and forfeits visibility into
+receipts for messages sent under the old key — receipts are a diagnostic
+convenience, not durable history.
+
+Compatibility: both changes are additive. A pre-receipts host answers
+`mailbox_status` with the standard unknown-type error frame
+(`{ "type": "error", "error": "unknown_message_type", "ref": "mailbox_status" }`);
+clients MUST treat that — or an RPC timeout — as "host does not support
+receipts" and degrade gracefully.
 
 ## Revocation
 

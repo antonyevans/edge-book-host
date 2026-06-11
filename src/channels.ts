@@ -80,6 +80,7 @@ interface Channel {
 export interface ChannelMetrics {
   connected_channels: number;
   mailbox_queue_depth: number;
+  receipts_ledger_size: number;
   deliveries: {
     enqueued: number;
     delivered: number;
@@ -107,6 +108,7 @@ export class ChannelRegistry {
     return {
       connected_channels: this.liveChannelCount(),
       mailbox_queue_depth: this.store.mailboxCount(),
+      receipts_ledger_size: this.store.receiptsCount(),
       deliveries: { ...this.counters },
     };
   }

@@ -311,3 +311,15 @@ test("mailbox_status rejects malformed frames: missing ids, empty ids, >50 ids",
 
   a.close();
 });
+
+test("GET /metrics gains additive receipts_ledger_size and keeps the existing shape", async () => {
+  const { baseUrl } = await startServer();
+  const res = await fetch(`${baseUrl}/metrics`);
+  assert.equal(res.status, 200);
+  const body = await res.json() as Record<string, unknown>;
+  assert.equal(body.ok, true);
+  assert.equal(typeof body.connected_channels, "number");
+  assert.equal(typeof body.mailbox_queue_depth, "number");
+  assert.ok(body.deliveries && typeof body.deliveries === "object", "existing deliveries block unchanged");
+  assert.equal(typeof body.receipts_ledger_size, "number", "additive receipts_ledger_size present");
+});

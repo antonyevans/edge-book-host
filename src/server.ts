@@ -408,6 +408,7 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         connected_channels: m.connected_channels,
         mailbox_queue_depth: m.mailbox_queue_depth,
+        receipts_ledger_size: m.receipts_ledger_size,
         deliveries: m.deliveries,
         uptime_s: Math.round(process.uptime()),
       });
