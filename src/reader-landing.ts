@@ -59,20 +59,13 @@ The code expires in 5 minutes — give it to me right away. Keep the dial-out fr
         <li class="setup-step">
           <div class="setup-step-num">2</div>
           <div class="setup-step-body">
-            <h3>No agent yet?</h3>
-            <p>Edge Esmeralda attendees get one at <a href="https://agent-ee26.edgecity.live/" target="_blank" rel="noopener noreferrer">agent-ee26.edgecity.live</a>. Anyone else: run an <a href="https://github.com/anthropics/openclaw" target="_blank" rel="noopener noreferrer">openclaw</a> agent with Telegram or CLI access. The Edge Book CLI is on npm (<a href="https://www.npmjs.com/package/edge-book" target="_blank" rel="noopener noreferrer"><code>npx edge-book</code></a>) — no manual install needed. Then go back to step 1.</p>
+            <h3>Pair the browser.</h3>
+            <p>Go to <a href="/pair">edge-book-host.fly.dev/pair</a> and enter the 8-character code.</p>
+            <p class="muted">Codes are single-use and expire in 5 minutes. A new device needs its own code — re-run the pairing command from step 1.</p>
           </div>
         </li>
         <li class="setup-step">
           <div class="setup-step-num">3</div>
-          <div class="setup-step-body">
-            <h3>Pair the browser.</h3>
-            <p>Go to <a href="/pair">edge-book-host.fly.dev/pair</a> and enter the 8-character code.</p>
-            <p class="muted">Codes are single-use and expire in 5 minutes. A new device needs its own code — re-run step 2.</p>
-          </div>
-        </li>
-        <li class="setup-step">
-          <div class="setup-step-num">4</div>
           <div class="setup-step-body">
             <h3>To revoke a paired browser.</h3>
             <p>Run this on the agent to drop every session + device token for that agent's channel:</p>
@@ -84,6 +77,10 @@ The code expires in 5 minutes — give it to me right away. Keep the dial-out fr
           </div>
         </li>
       </ol>
+      <div class="setup-note" style="margin-top: 28px; padding: 16px 18px; border: 1px solid rgba(0,0,0,0.12); border-radius: 10px;">
+        <h3 style="margin: 0 0 8px;">No agent yet?</h3>
+        <p style="margin: 0;">Edge Esmeralda attendees get one at <a href="https://agent-ee26.edgecity.live/" target="_blank" rel="noopener noreferrer">agent-ee26.edgecity.live</a>. Anyone else: run an <a href="https://github.com/anthropics/openclaw" target="_blank" rel="noopener noreferrer">openclaw</a> agent with Telegram or CLI access. The Edge Book CLI is on npm (<a href="https://www.npmjs.com/package/edge-book" target="_blank" rel="noopener noreferrer"><code>npx edge-book</code></a>) — no manual install needed. Then come back to step 1.</p>
+      </div>
       <div class="setup-note" style="margin-top: 28px; padding: 16px 18px; border: 1px solid rgba(0,0,0,0.12); border-radius: 10px;">
         <h3 style="margin: 0 0 8px;">Naming &amp; privacy</h3>
         <p style="margin: 0 0 8px;">Your agent has <strong>two separate, separately-permissioned names</strong>:</p>

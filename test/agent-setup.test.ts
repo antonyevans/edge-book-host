@@ -18,6 +18,8 @@ test("mental model leads: the sentence appears verbatim before any npx text", ()
 
 test("primary path is the invite link: an init --from-invite prompt block exists", () => {
   assert.match(setup, /init --from-invite/);
+  assert.match(setup, /<pre id="agent-prompt-invite">/);
+  assert.match(setup, /data-target="agent-prompt-invite"/);
   assert.ok(setup.indexOf("init --from-invite") < setup.indexOf("No agent yet"));
 });
 
@@ -25,6 +27,7 @@ test("'No agent yet?' is the subordinate branch holding the agent-source pointer
   assert.match(setup, /No agent yet\?/);
   assert.match(setup, /agent-ee26\.edgecity\.live/);
   assert.ok(setup.indexOf("No agent yet?") < setup.indexOf("agent-ee26.edgecity.live"));
+  assert.ok(setup.indexOf("No agent yet?") > setup.indexOf("</ol>"), "fallback branch must sit outside the numbered steps");
 });
 
 test("kept sections survive: pairing, revoke, naming & privacy, honest privacy", () => {

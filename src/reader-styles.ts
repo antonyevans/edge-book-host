@@ -257,7 +257,7 @@ code { font-size: 0.92em; }
 .invite-qr-code svg { display: block; width: 184px; height: 184px; }
 .invite-qr-caption { color: var(--muted); font-size: 11px; }
 
-/* spec-131: first-pairing welcome card */
+/* ── First-pairing welcome card (spec-131) ── */
 .welcome-card { text-align: center; align-items: center; display: flex; flex-direction: column; gap: 12px; padding: 36px 24px; }
 .welcome-title { margin: 0; font-size: 26px; }
 .welcome-copy { margin: 0; max-width: 430px; color: var(--muted); font-size: 14px; line-height: 1.55; }
