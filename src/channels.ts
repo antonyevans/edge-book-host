@@ -14,6 +14,7 @@ import type { WebSocket } from "ws";
 import { channelIdFromKey, randomToken, timingSafeEqual } from "./tokens.js";
 import { isValidSlug, verifyHandleClaim } from "./handles.js";
 import type { HandleClaimErrFrame } from "./contracts.js";
+import { logStructured, shortRef, traceRing } from "./observe.js";
 import type { HostStore } from "./store.js";
 
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -315,9 +316,13 @@ export class ChannelRegistry {
         return;
       }
       const id = randomToken(12);
-      const msg = { id, to, from: channel.channel_id, blob: blob_b64, ts: Date.now() };
+      // Optional observability sibling of the opaque blob (ea-claude-138):
+      // never required, never trusted for routing/auth — correlation only.
+      const trace_id = typeof frame.trace_id === "string" && frame.trace_id.length <= 128 ? frame.trace_id : undefined;
+      const msg = { id, to, from: channel.channel_id, blob: blob_b64, ts: Date.now(), ...(trace_id ? { trace_id } : {}) };
       this.store.enqueueMailbox(msg, MAILBOX_TTL_MS);
-      logEvent("mailbox_enqueue", { id, to: cref(to), from: cref(channel.channel_id) });
+      logStructured("mailbox_enqueue", { id, to: shortRef(to), from: shortRef(channel.channel_id), trace_id });
+      if (trace_id) traceRing.record({ trace_id, hop: "enqueue", id, from: shortRef(channel.channel_id), to: shortRef(to), ts: Date.now() });
       this.counters.enqueued++;
       // Liveness answer (spec-097 §B.1, normative ordering): computed BEFORE
       // the ack is sent — deliverQueued below would race it otherwise.
@@ -337,13 +342,15 @@ export class ChannelRegistry {
       // channel_id and any DID alias the sender used to address it.
       const recipient = this.store.peekMailboxRecipient(id);
       if (recipient && recipient !== channel.channel_id && recipient !== channel.agent_did) {
-        logEvent("mailbox_ack_reject", { id, by: cref(channel.channel_id) });
+        logStructured("mailbox_ack_reject", { id, by: shortRef(channel.channel_id) });
         this.counters.ack_rejects++;
         return;
       }
+      const ackTrace = this.store.peekMailboxTrace(id);
       const deleted = this.store.ackMailbox(id);
       if (deleted) {
-        logEvent("mailbox_ack", { id, to: cref(deleted) });
+        logStructured("mailbox_ack", { id, to: shortRef(deleted), trace_id: ackTrace });
+        if (ackTrace) traceRing.record({ trace_id: ackTrace, hop: "ack", id, to: shortRef(deleted), ts: Date.now() });
         this.counters.acked++;
       }
       return;
@@ -440,16 +447,16 @@ export class ChannelRegistry {
     const queued = this.store.mailboxForRecipient(channel.channel_id, channel.agent_did);
     let sent = 0;
     for (const m of queued) {
-      this.send(primary.ws, { type: "mailbox_deliver", id: m.id, from: m.from, blob_b64: m.blob, ts: m.ts });
+      this.send(primary.ws, { type: "mailbox_deliver", id: m.id, from: m.from, blob_b64: m.blob, ts: m.ts, ...(m.trace_id ? { trace_id: m.trace_id } : {}) });
       // Stamp the FIRST push (spec-097): "delivered" = written to a live socket
       // at least once. Redelivery keeps the first stamp (markDelivered no-ops).
       this.store.markDelivered(m.id);
+      // Covers first delivery AND redelivery-on-reconnect (at-least-once).
+      logStructured("mailbox_deliver", { id: m.id, to: shortRef(channel.channel_id), from: shortRef(m.from), trace_id: m.trace_id });
+      if (m.trace_id) traceRing.record({ trace_id: m.trace_id, hop: "deliver", id: m.id, from: shortRef(m.from), to: shortRef(channel.channel_id), ts: Date.now() });
       sent++;
     }
-    if (sent) {
-      logEvent("mailbox_deliver", { channel: cref(channel.channel_id), count: sent });
-      this.counters.delivered += sent;
-    }
+    if (sent) this.counters.delivered += sent;
     return sent;
   }
 
