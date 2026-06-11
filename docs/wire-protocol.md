@@ -43,6 +43,24 @@ or
 The code is registered as `{code → channel_id}` with TTL. Single-use: consumed
 at first redemption by a human entering it on the host-served `/pair` page.
 
+### Pairing completion (spec-135)
+
+After the human enters the code on `/pair` and the host creates a session, the host
+immediately pushes this frame down the agent's live dialout channel:
+
+Host → Agent:
+```json
+{ "type": "pair_complete", "device_id": "<channel_id>", "label": "<device label>" }
+```
+
+- `device_id`: the agent's `channel_id` (sha256 of `agent_key`).
+- `label`: coarse browser label derived from User-Agent (e.g. `"Chrome on macOS"`).
+- **Dropped silently** if the agent has no live socket at redemption time.
+
+**Backward compatibility:** This is an additive push frame. Old CLI clients that do not
+recognise `pair_complete` ignore it (the type falls through to the no-op path in
+`handleMessage`) and continue blocking until TTL as before.
+
 ## API proxy
 
 Browser hits the host `/api/*`. Host frames the call onto the agent's channel:
