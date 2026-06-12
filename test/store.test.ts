@@ -64,3 +64,23 @@ test("state persists across instances via state.json", () => {
   const b = new HostStore(dir);
   assert.ok(b.getSession("s1"));
 });
+
+test("registerPairingCode returns the authoritative expires_at (ea-claude-112)", () => {
+  const store = new HostStore(tmpDir());
+  const before = Date.now();
+  const expires = store.registerPairingCode("CODE-RET1", "chan-A", 60_000);
+  assert.ok(expires >= before + 60_000 && expires <= Date.now() + 60_000);
+});
+
+test("pairing code window: redeems just before expiry, fails just after (ea-claude-112)", () => {
+  const store = new HostStore(tmpDir());
+  store.registerPairingCode("CODE-WIN1", "chan-A", 40);
+  const untilBefore = Date.now() + 20;
+  while (Date.now() < untilBefore) { /* spin */ }
+  assert.equal(store.consumePairingCode("CODE-WIN1"), "chan-A", "redeem inside the window succeeds");
+
+  store.registerPairingCode("CODE-WIN2", "chan-A", 40);
+  const untilAfter = Date.now() + 45;
+  while (Date.now() < untilAfter) { /* spin */ }
+  assert.equal(store.consumePairingCode("CODE-WIN2"), null, "redeem after the window fails");
+});

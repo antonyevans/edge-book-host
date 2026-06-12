@@ -320,13 +320,17 @@ export class HostStore {
   }
 
   // --- pairing codes ---
-  registerPairingCode(code: string, channel_id: string, ttl_ms: number): void {
+  // Returns the authoritative host-clock deadline so the ack can carry it
+  // back to the agent (ea-claude-112).
+  registerPairingCode(code: string, channel_id: string, ttl_ms: number): number {
+    const expires_at = Date.now() + ttl_ms;
     this.state.pairing_codes[code] = {
       code,
       channel_id,
-      expires_at: Date.now() + ttl_ms
+      expires_at
     };
     this.scheduleFlush();
+    return expires_at;
   }
 
   consumePairingCode(code: string): string | null {
