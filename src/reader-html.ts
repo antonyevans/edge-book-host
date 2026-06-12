@@ -36,7 +36,7 @@ export function renderReaderHtml(ctx: ReaderContext): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   ${csrfMeta}
-  <title>Sanctum</title>
+  <title>Edge Book</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet">
@@ -52,7 +52,7 @@ export function renderReaderHtml(ctx: ReaderContext): string {
             <path d="M13 3 V23" stroke="#F2C079" stroke-width="1.8"/>
             <circle cx="13" cy="13" r="2.7" fill="#FFD98A"/>
           </svg>
-          Sanctum
+          Edge Book
         </div>
         <div class="search-wrap">
           <svg class="search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.6"/></svg>
@@ -68,12 +68,12 @@ export function renderReaderHtml(ctx: ReaderContext): string {
       </div>
     </header>
     <div class="page">
-    <nav aria-label="Sanctum views">
+    <nav aria-label="Edge Book views">
       <div class="owner-card">
         <div id="ownerAvatar" class="avatar">EB</div>
         <div>
           <div id="ownerName" class="owner-name">Connecting...</div>
-          <div id="ownerShort" class="owner-id">your sanctum</div>
+          <div id="ownerShort" class="owner-id">your Edge Book</div>
         </div>
       </div>
       <button data-view="profile">&#9782; Profile <span id="profileCount">Owner</span></button>
@@ -109,7 +109,7 @@ export function renderReaderHtml(ctx: ReaderContext): string {
         <span id="viewState" class="badge">Loading</span>
       </div>
       <section id="content" class="list">
-        <div class="loading">Loading your sanctum...</div>
+        <div class="loading">Loading your Edge Book...</div>
       </section>
     </main>
     <aside class="rail">
@@ -123,7 +123,7 @@ export function renderReaderHtml(ctx: ReaderContext): string {
         </div>
         <div class="rail-card" id="peopleCard">
           <h3 class="rail-card-title">Your people</h3>
-          <div class="rail-card-lede" id="peopleCount">0 in your sanctum</div>
+          <div class="rail-card-lede" id="peopleCount">0 in your Edge Book</div>
           <div class="friends-list" id="friendsList"></div>
         </div>
         <div class="rail-note">No ads. No feed algorithm.<br>Your graph isn&rsquo;t for sale. <b>It&rsquo;s yours.</b></div>

@@ -39,7 +39,7 @@ test("reader renders capabilities on the profile, not in the feed (R3)", () => {
   assert.match(html, /capability deprecated/);   // deprecated styling hook
 });
 
-test("reader ships Sanctum CSS for the new post types", () => {
+test("reader ships Edge Book CSS for the new post types", () => {
   for (const cls of [".endorsement", ".endorsement-evidence", ".capabilities", ".capability.deprecated", ".signal-stale"]) {
     assert.ok(html.includes(cls), `missing CSS for ${cls}`);
   }

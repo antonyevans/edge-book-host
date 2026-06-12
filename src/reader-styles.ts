@@ -13,10 +13,10 @@ ${LANDING_SHELL_CSS}${LANDING_SECTIONS_CSS}</style>`;
 // dashboardHtml(). Used inside the authenticated reader page.
 // ----------------------------------------------------------------------------
 export const READER_STYLES = `<style>
-/* ── Sanctum design tokens ── */
+/* ── Edge Book design tokens ── */
 :root, [data-theme="light"] {
   color-scheme: light;
-  /* Sanctum palette */
+  /* Edge Book palette */
   --paper: #F4EEE6; --surface: #FBF7F1; --ink: #1C1622; --espresso: #3A2238;
   --ember: #5A2150;
   --amber: #E8A23D;
