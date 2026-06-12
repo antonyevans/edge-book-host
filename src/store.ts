@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { MailboxMessage } from "./contracts.js";
 import type { FunnelEntry } from "./funnel.js";
+import type { PackRecord } from "./packs.js";
 import { logStructured, shortRef, traceRing } from "./observe.js";
 
 // Receipts ledger bounds (spec-097): acked entries expire after the TTL
@@ -109,6 +110,9 @@ interface State {
   // Activation-funnel records keyed by agent id (spec-142). Survives restart.
   // All logic (stamps, eviction fold, report) lives in funnel.ts.
   funnel: Record<string, FunnelEntry>;
+  // Starter packs keyed by slug (spec-145). Survives restart.
+  // All logic (validation, caps, rate limit, routes) lives in packs.ts.
+  packs: Record<string, PackRecord>;
 }
 
 const EMPTY: State = {
@@ -119,7 +123,8 @@ const EMPTY: State = {
   mailbox: {},
   handles: {},
   receipts: {},
-  funnel: {}
+  funnel: {},
+  packs: {}
 };
 
 export class HostStore {
@@ -146,7 +151,8 @@ export class HostStore {
         mailbox: parsed.mailbox || {},
         handles: parsed.handles || {},
         receipts: parsed.receipts || {},
-        funnel: parsed.funnel || {}
+        funnel: parsed.funnel || {},
+        packs: parsed.packs || {}
       };
     } catch {
       return structuredClone(EMPTY);
@@ -490,6 +496,17 @@ export class HostStore {
   }
 
   funnelChanged(): void {
+    this.scheduleFlush();
+  }
+
+  // --- starter packs (spec-145) ---
+  // Same narrow seam as the funnel: packs.ts owns all pack logic; the store
+  // owns persistence. Returns the LIVE map — callers mutate, then signal.
+  packsMap(): Record<string, PackRecord> {
+    return this.state.packs;
+  }
+
+  packsChanged(): void {
     this.scheduleFlush();
   }
 

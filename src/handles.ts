@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 
-export const RESERVED_HANDLES = new Set(["add", "healthz", "metrics", "agent", "api", "handle", "auth", "directory"]);
+// "default" is reserved by spec-145: /pack/default is the DEFAULT_PACK_SLUG
+// alias, so no pack (or handle — the lists are shared) may claim it.
+export const RESERVED_HANDLES = new Set(["add", "healthz", "metrics", "agent", "api", "handle", "auth", "directory", "default"]);
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/;
 
 export function isValidSlug(handle: string): boolean {

@@ -4,10 +4,14 @@
 // Trust boundaries (every route falls in exactly one):
 //   PUBLIC (no auth): GET / (landing|reader shell), /pair (rate-limited form),
 //     /agent-setup, /add, /handle/:handle (registry resolve), /health, /healthz, /metrics,
-//     /support/recipient (404 unless SUPPORT_DID is set — spec-134, src/support.ts).
+//     /support/recipient (404 unless SUPPORT_DID is set — spec-134, src/support.ts),
+//     /packs (starter-pack listing, NO member handles — spec-145, src/packs.ts).
+//   AGENT (Bearer agent_key → known channel): GET /pack/:slug — full pack
+//     record incl. members; rate-limited per agent per pack (spec-145).
 //   ADMIN (Bearer ADMIN_TOKEN, fail-closed 404 when unset): /admin/agents,
-//     /admin/trace/:trace_id, /admin/funnel — see src/admin.ts (ea-claude-138,
-//     spec-142). Nothing funnel-related appears on the public /metrics.
+//     /admin/trace/:trace_id, /admin/funnel, PUT/DELETE /admin/pack/:slug —
+//     see src/admin.ts (ea-claude-138, spec-142, spec-145). Nothing
+//     funnel-related appears on the public /metrics.
 //   SESSION + CSRF: /auth/* and every /api/* proxy call — session cookie
 //     (ebh_session, 12h) minted at pair time; device cookie (ebh_device, 28d)
 //     auto-resumes; mutating /api/* requires the x-csrf-token double-submit.
@@ -34,6 +38,7 @@ import { renderDirectoryHtml } from "./reader-directory.js";
 import { renderPairHtml } from "./reader-pair.js";
 import { handleDirectory } from "./http-directory.js";
 import { handleSupportRecipientRoute, isSupportRecipientRequest } from "./support.js";
+import { handlePackFetch, handlePacksList } from "./packs.js";
 import { backfillFunnel, recordPaired } from "./funnel.js";
 
 const PORT = Number(process.env.PORT || 8080);
@@ -479,15 +484,34 @@ const server = http.createServer(async (req, res) => {
       sendHtml(res, 200, renderDirectoryHtml());
       return;
     }
+    // Starter packs (spec-145, src/packs.ts). /packs is public but carries no
+    // member handles; /pack/:slug requires a known agent (Bearer agent_key)
+    // and is rate-limited per agent per pack — it gates the join fan-out.
+    if (url.pathname === "/packs" && req.method === "GET") {
+      handlePacksList(res, store, sendJson);
+      return;
+    }
+    if (url.pathname.startsWith("/pack/") && req.method === "GET") {
+      handlePackFetch(req, res, url, store, sendJson);
+      return;
+    }
     if (url.pathname === "/pair") {
       await handlePair(req, res, url);
       return;
     }
     // Admin/observability surface (ea-claude-138): Bearer ADMIN_TOKEN auth,
     // fail-closed 404 when ADMIN_TOKEN is unset. Sets its own headers.
+    // PUT /admin/pack/:slug carries a JSON body (spec-145) — parsed here, the
+    // only async step, so handleAdmin itself stays synchronous.
     if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) {
       setSecurityHeaders(res);
-      handleAdmin(req, res, url, { store, channels, traceRing });
+      let adminBody: unknown;
+      if (req.method === "PUT") {
+        let raw: Buffer;
+        try { raw = await readBody(req, 64 * 1024); } catch { sendJson(res, 413, { ok: false, error: "body_too_large" }); return; }
+        try { adminBody = raw.length ? JSON.parse(raw.toString("utf8")) : {}; } catch { sendJson(res, 400, { ok: false, error: "invalid_json" }); return; }
+      }
+      handleAdmin(req, res, url, { store, channels, traceRing }, adminBody);
       return;
     }
     const session = resolveSession(req, res);
