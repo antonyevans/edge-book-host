@@ -13,6 +13,7 @@ this file says where NEW code goes and what size limits apply.
 | reader page markup | `src/reader-html.ts`; a NEW page → a new `src/reader-<page>.ts` generator |
 | reader client logic | `src/reader-script.ts` (must stay valid standalone JS — syntax test parses it) |
 | reader CSS / SVGs | `src/reader-styles.ts` / `src/reader-assets.ts` |
+| activation-funnel / cohort metrics (spec-142) | `src/funnel.ts` — stamps, exclusions, eviction fold, report; persistence stays in `HostStore` via the `funnelEntries()` seam |
 | token / auth primitives | `src/tokens.ts`; handle rules → `src/handles.ts` (must equal CLI `src/handles.ts`) |
 | contract or wire-frame types | `src/contracts.ts` — shapes FROZEN; moving between files allowed, renaming/reshaping never |
 | **anything you are unsure about** | **a NEW file — never append to an existing one** |

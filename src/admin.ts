@@ -3,6 +3,8 @@
 // Routes (all under /admin/, all GET):
 //   /admin/agents            — per-agent mailbox depth + last-seen dial-out
 //   /admin/trace/<trace_id>  — relay-side hops recorded for a trace
+//   /admin/funnel            — activation-funnel cohort report (spec-142);
+//                              counts only, never DIDs; small cohorts suppressed
 //
 // Auth model — FAIL CLOSED:
 //   - The token comes from the ADMIN_TOKEN env var, read per request (so a
@@ -20,6 +22,7 @@ import type http from "node:http";
 import type { ChannelRegistry } from "./channels.js";
 import type { TraceRing } from "./observe.js";
 import type { HostStore } from "./store.js";
+import { buildFunnelReport } from "./funnel.js";
 import { timingSafeEqual } from "./tokens.js";
 
 export interface AdminDeps {
@@ -81,6 +84,13 @@ export function handleAdmin(req: http.IncomingMessage, res: http.ServerResponse,
       ...(c.last_active_at !== undefined ? { last_active_at: c.last_active_at } : {})
     }));
     json(res, 200, { ok: true, agents });
+    return;
+  }
+  // Activation-funnel cohort report (spec-142). Admin-only by design — signup
+  // velocity and activation rate are not public information for a private
+  // network (never exposed on /metrics).
+  if (url.pathname === "/admin/funnel") {
+    json(res, 200, { ok: true, ...buildFunnelReport(deps.store) });
     return;
   }
   if (url.pathname.startsWith("/admin/trace/")) {
