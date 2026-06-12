@@ -14,6 +14,7 @@ import type { WebSocket } from "ws";
 import { channelIdFromKey, randomToken, timingSafeEqual } from "./tokens.js";
 import { isValidSlug, verifyHandleClaim } from "./handles.js";
 import type { HandleClaimErrFrame } from "./contracts.js";
+import { gateInboundFrame } from "./frame-validate.js";
 import { logStructured, shortRef, traceRing } from "./observe.js";
 import { SupportSendLimiter, checkSupportSend } from "./support.js";
 import type { HostStore } from "./store.js";
@@ -89,11 +90,14 @@ export interface ChannelMetrics {
     acked: number;
     ack_rejects: number;
   };
+  /** Inbound frames rejected by contract validation (ea-claude-152). */
+  frames_invalid: number;
 }
 
 export class ChannelRegistry {
   private channels = new Map<string, Channel>();
   private counters = { enqueued: 0, delivered: 0, acked: 0, ack_rejects: 0 };
+  private framesInvalid = 0;
   // Per-sender budget for sends addressed to the SUPPORT_DID recipient (spec-134).
   private supportLimiter = new SupportSendLimiter();
 
@@ -114,6 +118,7 @@ export class ChannelRegistry {
       mailbox_queue_depth: this.store.mailboxCount(),
       receipts_ledger_size: this.store.receiptsCount(),
       deliveries: { ...this.counters },
+      frames_invalid: this.framesInvalid,
     };
   }
 
@@ -248,6 +253,17 @@ export class ChannelRegistry {
     if (typeof data !== "object" || data === null) return;
     const frame = data as Record<string, unknown>;
     const type = frame.type;
+    // Contract gate (ea-claude-152, fail closed): inbound agent frames the
+    // generated wire schema covers are validated BEFORE any handler logic.
+    // Invalid frames get the protocol's error reply (or a silent drop where
+    // none exists) and never reach the loose-coercion paths below.
+    const gate = gateInboundFrame(frame);
+    if (!gate.ok) {
+      this.framesInvalid++;
+      logStructured("frame_invalid", { type: String(type), errors: gate.errors.join("; ") });
+      if (gate.reply) this.send(ws, gate.reply);
+      return;
+    }
     if (type === "pong") {
       const conn = channel.connections.find((c) => c.ws === ws);
       if (conn) conn.missedPongs = 0;
