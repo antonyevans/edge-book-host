@@ -126,20 +126,24 @@ function main(): void {
 
   // --check: regenerate to a temp dir and diff both artifacts (spec-0042).
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wire-schemas-"));
-  fs.writeFileSync(path.join(tmp, "wire-frames.schema.json"), json);
-  fs.writeFileSync(path.join(tmp, "wire-schema.ts"), ts);
   let drift = false;
-  for (const [rel, fresh] of [
-    [JSON_OUT, path.join(tmp, "wire-frames.schema.json")],
-    [TS_OUT, path.join(tmp, "wire-schema.ts")],
-  ] as const) {
-    const committed = fs.existsSync(path.join(ROOT, rel))
-      ? fs.readFileSync(path.join(ROOT, rel), "utf8")
-      : "<missing>";
-    if (committed !== fs.readFileSync(fresh, "utf8")) {
-      console.error(`DRIFT: ${rel} does not match regenerated output (run \`npm run schemas\`)`);
-      drift = true;
+  try {
+    fs.writeFileSync(path.join(tmp, "wire-frames.schema.json"), json);
+    fs.writeFileSync(path.join(tmp, "wire-schema.ts"), ts);
+    for (const [rel, fresh] of [
+      [JSON_OUT, path.join(tmp, "wire-frames.schema.json")],
+      [TS_OUT, path.join(tmp, "wire-schema.ts")],
+    ] as const) {
+      const committed = fs.existsSync(path.join(ROOT, rel))
+        ? fs.readFileSync(path.join(ROOT, rel), "utf8")
+        : "<missing>";
+      if (committed !== fs.readFileSync(fresh, "utf8")) {
+        console.error(`DRIFT: ${rel} does not match regenerated output (run \`npm run schemas\`)`);
+        drift = true;
+      }
     }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
   if (drift) process.exit(1);
   console.log("schemas:check ok — artifacts match src/contracts.ts");

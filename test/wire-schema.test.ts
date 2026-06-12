@@ -34,6 +34,30 @@ test("schema never sets additionalProperties:false (forward compatibility)", () 
   assert.ok(!JSON.stringify(WIRE_FRAMES_SCHEMA).includes('"additionalProperties":false'));
 });
 
+// Guard against silent false-accepts: the runtime validator interprets only a
+// keyword subset. If a future contracts.ts change makes the generator emit a
+// keyword outside this allowlist (pattern, minimum, oneOf, allOf, ...), this
+// test fails instead of the validator silently ignoring the constraint.
+const VALIDATOR_KEYWORDS = new Set([
+  "$ref", "$schema", "$id", "anyOf", "const", "enum", "type",
+  "required", "properties", "items", "definitions", "additionalProperties",
+  "description", "title", "default",
+]);
+test("schema uses only keywords the runtime validator interprets", () => {
+  const walk = (node: unknown, at: string): void => {
+    if (Array.isArray(node)) { node.forEach((v, i) => walk(v, `${at}[${i}]`)); return; }
+    if (!node || typeof node !== "object") return;
+    const inProperties = at.endsWith(".properties") || at.endsWith(".definitions");
+    for (const [key, value] of Object.entries(node)) {
+      if (!inProperties && !VALIDATOR_KEYWORDS.has(key)) {
+        assert.fail(`unsupported schema keyword "${key}" at ${at} — extend src/frame-validate.ts or the allowlist`);
+      }
+      walk(value, `${at}.${key}`);
+    }
+  };
+  walk(WIRE_FRAMES_SCHEMA, "$");
+});
+
 // ── (b) Validator unit cases ──────────────────────────────────────────────────
 const VALID_FRAMES: Record<string, Record<string, unknown>> = {
   MailboxSendFrame: { type: "mailbox_send", request_id: "r1", to: "chanB", blob_b64: "aGk=" },

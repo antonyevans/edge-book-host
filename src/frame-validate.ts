@@ -89,14 +89,14 @@ function checkObject(schema: Schema, obj: Record<string, unknown>, at: string, e
   if (Array.isArray(required)) {
     for (const key of required) {
       if (errors.length >= MAX_ERRORS) return;
-      if (!(typeof key === "string" && key in obj)) errors.push(`${at}: missing required property "${String(key)}"`);
+      if (!(typeof key === "string" && Object.prototype.hasOwnProperty.call(obj, key))) errors.push(`${at}: missing required property "${String(key)}"`);
     }
   }
   const properties = schema.properties;
   if (properties && typeof properties === "object") {
     for (const [key, propSchema] of Object.entries(properties as Record<string, Schema>)) {
       if (errors.length >= MAX_ERRORS) return;
-      if (key in obj) check(propSchema, obj[key], `${at}.${key}`, errors);
+      if (Object.prototype.hasOwnProperty.call(obj, key)) check(propSchema, obj[key], `${at}.${key}`, errors);
     }
   }
   // Properties NOT in the schema pass untouched (forward compatibility).
