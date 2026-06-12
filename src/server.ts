@@ -521,6 +521,45 @@ server.on("upgrade", (req, socket, head) => {
   wss.handleUpgrade(req, socket, head, (ws) => attachAgentSocket(ws, remote));
 });
 
+function parseAgentFrame(raw: import("ws").RawData | string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(typeof raw === "string" ? raw : Buffer.isBuffer(raw) ? raw.toString("utf8") : Buffer.concat(raw as Buffer[]).toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+// Validates the hello frame, attaches the socket to its channel, and sends
+// hello_ok. Returns the channel_id on success, null after closing the socket
+// on any handshake failure.
+function completeAgentHello(ws: import("ws").WebSocket, frame: Record<string, unknown>, remote: string): string | null {
+  if (frame.type !== "hello") {
+    try { ws.send(JSON.stringify({ type: "hello_err", error: "hello_required" })); } catch { /* ignore */ }
+    try { ws.close(1002, "hello_required"); } catch { /* ignore */ }
+    return null;
+  }
+  const agent_key = typeof frame.agent_key === "string" ? frame.agent_key : "";
+  const agent_did = typeof frame.agent_did === "string" ? frame.agent_did : null;
+  if (!agent_key) {
+    try { ws.send(JSON.stringify({ type: "hello_err", error: "missing_agent_key" })); ws.close(1002, "missing_agent_key"); } catch { /* ignore */ }
+    return null;
+  }
+  const result = channels.attach(ws, agent_key, agent_did, remote);
+  if (!result.ok) {
+    try { ws.send(JSON.stringify({ type: "hello_err", error: result.error })); ws.close(1008, result.error); } catch { /* ignore */ }
+    return null;
+  }
+  const cid = result.channel_id;
+  try { ws.send(JSON.stringify({ type: "hello_ok", channel_id: cid, server_time: new Date().toISOString() })); } catch { /* ignore */ }
+  // Flush any store-and-forward envelopes queued while this channel was
+  // offline (ea-claude-064). Deferred a tick after hello_ok so a client that
+  // wires its frame handler right after the handshake doesn't miss the first
+  // delivery. Delivery is at-least-once regardless — unacked messages stay
+  // queued and redeliver on the next connect.
+  setImmediate(() => { try { channels.flushMailbox(cid); } catch { /* ignore */ } });
+  return cid;
+}
+
 function attachAgentSocket(ws: import("ws").WebSocket, remote: string): void {
   let channel_id: string | null = null;
   const helloTimer = setTimeout(() => {
@@ -529,40 +568,14 @@ function attachAgentSocket(ws: import("ws").WebSocket, remote: string): void {
   }, 10_000);
 
   ws.on("message", (raw) => {
-    let frame: Record<string, unknown>;
-    try {
-      frame = JSON.parse(typeof raw === "string" ? raw : Buffer.isBuffer(raw) ? raw.toString("utf8") : Buffer.concat(raw as Buffer[]).toString("utf8"));
-    } catch {
+    const frame = parseAgentFrame(raw);
+    if (!frame) {
       try { ws.send(JSON.stringify({ type: "error", error: "invalid_json" })); } catch { /* ignore */ }
       return;
     }
     if (!channel_id) {
-      if (frame.type !== "hello") {
-        try { ws.send(JSON.stringify({ type: "hello_err", error: "hello_required" })); } catch { /* ignore */ }
-        try { ws.close(1002, "hello_required"); } catch { /* ignore */ }
-        return;
-      }
-      const agent_key = typeof frame.agent_key === "string" ? frame.agent_key : "";
-      const agent_did = typeof frame.agent_did === "string" ? frame.agent_did : null;
-      if (!agent_key) {
-        try { ws.send(JSON.stringify({ type: "hello_err", error: "missing_agent_key" })); ws.close(1002, "missing_agent_key"); } catch { /* ignore */ }
-        return;
-      }
-      const result = channels.attach(ws, agent_key, agent_did, remote);
-      if (!result.ok) {
-        try { ws.send(JSON.stringify({ type: "hello_err", error: result.error })); ws.close(1008, result.error); } catch { /* ignore */ }
-        return;
-      }
-      channel_id = result.channel_id;
-      clearTimeout(helloTimer);
-      try { ws.send(JSON.stringify({ type: "hello_ok", channel_id, server_time: new Date().toISOString() })); } catch { /* ignore */ }
-      // Flush any store-and-forward envelopes queued while this channel was
-      // offline (ea-claude-064). Deferred a tick after hello_ok so a client that
-      // wires its frame handler right after the handshake doesn't miss the first
-      // delivery. Delivery is at-least-once regardless — unacked messages stay
-      // queued and redeliver on the next connect.
-      const cid = channel_id;
-      setImmediate(() => { try { channels.flushMailbox(cid); } catch { /* ignore */ } });
+      channel_id = completeAgentHello(ws, frame, remote);
+      if (channel_id) clearTimeout(helloTimer);
       return;
     }
     channels.handleFrame(channel_id, ws, frame);
