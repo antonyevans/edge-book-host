@@ -327,3 +327,42 @@ test("GET /metrics (no auth) exposes nothing funnel-related", async () => {
     assert.ok(!raw.includes(banned), `public /metrics must not contain "${banned}"`);
   }
 });
+
+// Review-finding regressions (fresh-context review, 2026-06-12).
+test("bilateral stamps even when the sender's peers_sent list is at cap", async () => {
+  const s = tmpStore();
+  addChannel(s, "ch-full", "did:test:full", 1000);
+  addChannel(s, "ch-rev", "did:test:rev", 1000);
+  recordPaired(s, "ch-full", 1000);                            // sender's record exists
+  recordSend(s, "ch-rev", "did:test:full", 2000);             // reverse direction exists
+  const full = rec(s, "did:test:full");
+  full.peers_sent = Array.from({ length: 200 }, (_, i) => `did:test:filler-${i}`); // cap reached
+  recordSend(s, "ch-full", "did:test:rev", 3000);             // forward send at cap
+  assert.ok(rec(s, "did:test:full").bilateral_at, "sender stamped despite full list");
+  assert.ok(rec(s, "did:test:rev").bilateral_at, "peer stamped despite full list");
+});
+
+test("orphan channel-id record reconciles into the DID record when the DID lands", async () => {
+  const s = tmpStore();
+  addChannel(s, "ch-late", null, 1000);                        // paired before DID known
+  recordPaired(s, "ch-late", 1000);
+  assert.ok(s.funnelEntries()["ch-late"], "orphan keyed by channel_id");
+  s.recordChannel({ channel_id: "ch-late", agent_key: "key-ch-late", agent_did: "did:test:late", first_seen_at: 1000, last_seen_at: 2000 });
+  recordHandleClaimed(s, "did:test:late", 2000);               // canonicalization reconciles
+  const merged = rec(s, "did:test:late");
+  assert.ok(merged.paired_at, "paired stage carried from the orphan");
+  assert.ok(merged.handle_claimed_at, "new stage on the merged record");
+  assert.equal(s.funnelEntries()["ch-late"], undefined, "orphan removed — one agent, one record");
+});
+
+test("non-positive EDGE_BOOK_FUNNEL_CAP falls back to the default instead of evicting everything", async () => {
+  const s = tmpStore();
+  process.env.EDGE_BOOK_FUNNEL_CAP = "-1";
+  try {
+    addChannel(s, "ch-cap", "did:test:cap", 1000);
+    recordPaired(s, "ch-cap", 1000);
+    assert.ok(rec(s, "did:test:cap"), "record survives a misconfigured cap");
+  } finally {
+    delete process.env.EDGE_BOOK_FUNNEL_CAP;
+  }
+});

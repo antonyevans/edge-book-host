@@ -79,7 +79,8 @@ function isAggregate(e: FunnelEntry): e is FunnelAggregate {
 // Read per use (pattern: SUPPORT_DID / ADMIN_TOKEN) so tests can toggle and a
 // deploy can retune without code changes.
 function funnelCap(): number {
-  return Number(process.env.EDGE_BOOK_FUNNEL_CAP) || 10_000;
+  const n = Number(process.env.EDGE_BOOK_FUNNEL_CAP);
+  return Number.isFinite(n) && n > 0 ? n : 10_000;
 }
 
 function iso(ms: number): string {
@@ -119,11 +120,40 @@ function excludedIds(store: HostStore): Set<string> {
 // Map an address (channel_id or DID alias) to the funnel's canonical agent id:
 // the channel's DID when known, else the channel_id, else the raw address.
 function canonicalAgentId(store: HostStore, address: string): string {
-  const byChannel = store.getChannel(address);
-  if (byChannel) return byChannel.agent_did ?? byChannel.channel_id;
-  const byDid = store.channelByDid(address);
-  if (byDid) return byDid.agent_did ?? byDid.channel_id;
-  return address;
+  const ch = store.getChannel(address) ?? store.channelByDid(address);
+  if (!ch) return address;
+  // A channel that gained its DID after pairing may have an orphan funnel
+  // record keyed by channel_id (paired_at landed pre-DID). Reconcile it into
+  // the DID record so one agent is one record and its funnel can complete.
+  // Residual, accepted: directed-pair entries OTHER records hold under the
+  // pre-DID key are not rewritten — a bilateral closed only through such an
+  // entry is missed.
+  if (ch.agent_did) reconcileOrphanRecord(store, ch.channel_id, ch.agent_did);
+  return ch.agent_did ?? ch.channel_id;
+}
+
+function reconcileOrphanRecord(store: HostStore, channelId: string, did: string): void {
+  if (channelId === did) return;
+  const entries = store.funnelEntries();
+  const orphan = entries[channelId];
+  if (!orphan || isAggregate(orphan)) return;
+  const target = getRecord(store, did);
+  if (!target) {
+    orphan.agent_id = did;
+    entries[did] = orphan;
+  } else {
+    // First-write-wins per stage; earliest first_seen keeps the true cohort.
+    if (orphan.first_seen_at < target.first_seen_at) target.first_seen_at = orphan.first_seen_at;
+    target.paired_at = target.paired_at ?? orphan.paired_at;
+    target.handle_claimed_at = target.handle_claimed_at ?? orphan.handle_claimed_at;
+    target.first_send_at = target.first_send_at ?? orphan.first_send_at;
+    target.bilateral_at = target.bilateral_at ?? orphan.bilateral_at;
+    if (orphan.peers_sent?.length) {
+      target.peers_sent = [...new Set([...(target.peers_sent ?? []), ...orphan.peers_sent])].slice(0, PEERS_SENT_CAP);
+    }
+  }
+  delete entries[channelId];
+  store.funnelChanged();
 }
 
 function getRecord(store: HostStore, id: string): FunnelRecord | undefined {
@@ -176,17 +206,17 @@ export function recordSend(store: HostStore, from_channel_id: string, to: string
 // Directed-pair bookkeeping for bilateral detection: remember from→to on the
 // sender, and when the reverse direction already exists, stamp BOTH (if unset).
 function trackBilateral(store: HostStore, sender: FunnelRecord, from: string, toId: string, now: number): void {
-  const peers = sender.peers_sent ?? (sender.peers_sent = []);
-  if (!peers.includes(toId)) {
-    if (peers.length >= PEERS_SENT_CAP) return;
-    peers.push(toId);
-  }
+  // Reverse-direction check runs BEFORE the cap guard: a bilateral that is
+  // already detectable from the peer's record must stamp even when the
+  // sender's directed-pair list is full — closing it needs no new list entry.
   const peer = getRecord(store, toId);
   if (peer?.peers_sent?.includes(from)) {
     const stamp = iso(now);
     sender.bilateral_at = sender.bilateral_at ?? stamp;
     peer.bilateral_at = peer.bilateral_at ?? stamp;
   }
+  const peers = sender.peers_sent ?? (sender.peers_sent = []);
+  if (!peers.includes(toId) && peers.length < PEERS_SENT_CAP) peers.push(toId);
 }
 
 // Boot-time backfill: every known channel with no FunnelRecord gets one
