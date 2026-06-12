@@ -6,7 +6,8 @@
 //     /agent-setup, /add, /handle/:handle (registry resolve), /health, /healthz, /metrics,
 //     /support/recipient (404 unless SUPPORT_DID is set — spec-134, src/support.ts).
 //   ADMIN (Bearer ADMIN_TOKEN, fail-closed 404 when unset): /admin/agents,
-//     /admin/trace/:trace_id — see src/admin.ts (ea-claude-138).
+//     /admin/trace/:trace_id, /admin/funnel — see src/admin.ts (ea-claude-138,
+//     spec-142). Nothing funnel-related appears on the public /metrics.
 //   SESSION + CSRF: /auth/* and every /api/* proxy call — session cookie
 //     (ebh_session, 12h) minted at pair time; device cookie (ebh_device, 28d)
 //     auto-resumes; mutating /api/* requires the x-csrf-token double-submit.
@@ -33,6 +34,7 @@ import { renderDirectoryHtml } from "./reader-directory.js";
 import { renderPairHtml } from "./reader-pair.js";
 import { handleDirectory } from "./http-directory.js";
 import { handleSupportRecipientRoute, isSupportRecipientRequest } from "./support.js";
+import { backfillFunnel, recordPaired } from "./funnel.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -53,6 +55,9 @@ const FORWARD_HEADER_DENYLIST = new Set([
 ]);
 
 const store = new HostStore(DATA_DIR);
+// Boot-time funnel backfill (spec-142): pre-existing channels get a funnel
+// record in their historical cohort. Best-effort — never blocks boot.
+try { backfillFunnel(store); } catch { /* best-effort */ }
 const channels = new ChannelRegistry(store);
 const pairLimiter = new RateLimiter(10, 60_000, 5 * 60_000);
 
@@ -306,6 +311,9 @@ async function handlePair(req: http.IncomingMessage, res: http.ServerResponse, u
   });
   // Human activity — resets the idle-timeout clock for this channel (ea-061).
   store.touchChannelActivity(channel_id);
+  // Funnel stamp (spec-142): first successful pairing. Best-effort — a funnel
+  // failure must never fail the pair.
+  try { recordPaired(store, channel_id); } catch { /* best-effort */ }
   // Bind a session.
   const session_id = randomToken();
   const csrf_token = randomToken();

@@ -17,6 +17,7 @@ import type { HandleClaimErrFrame } from "./contracts.js";
 import { gateInboundFrame } from "./frame-validate.js";
 import { logStructured, shortRef, traceRing } from "./observe.js";
 import { SupportSendLimiter, checkSupportSend } from "./support.js";
+import { recordHandleClaimed, recordSend } from "./funnel.js";
 import type { HostStore } from "./store.js";
 
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -352,6 +353,9 @@ export class ChannelRegistry {
       logStructured("mailbox_enqueue", { id, to: shortRef(to), from: shortRef(channel.channel_id), trace_id });
       if (trace_id) traceRing.record({ trace_id, hop: "enqueue", id, from: shortRef(channel.channel_id), to: shortRef(to), ts: Date.now() });
       this.counters.enqueued++;
+      // Funnel stamp (spec-142): best-effort — a funnel failure must never
+      // fail the send (receipts posture). Metadata only; the blob stays opaque.
+      try { recordSend(this.store, channel.channel_id, to); } catch { /* best-effort */ }
       // Liveness answer (spec-097 §B.1, normative ordering): computed BEFORE
       // the ack is sent — deliverQueued below would race it otherwise.
       const recipient_live = this.resolveLiveChannel(to) !== undefined;
@@ -433,6 +437,8 @@ export class ChannelRegistry {
       const result = this.store.claimHandle({ handle, agent_did: String(card.agent_id), card, claim_sig, claimed_at, discoverable });
       if (result === "taken") { this.send(ws, { type: "handle_claim_err", request_id, reason: "taken" } satisfies HandleClaimErrFrame); return; }
       logEvent("handle_claim", { handle, agent_did: cref(String(card.agent_id)) });
+      // Funnel stamp (spec-142): best-effort, never fails the claim.
+      try { recordHandleClaimed(this.store, String(card.agent_id)); } catch { /* best-effort */ }
       this.send(ws, { type: "handle_claim_ok", request_id, handle });
       return;
     }

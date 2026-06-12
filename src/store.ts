@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { MailboxMessage } from "./contracts.js";
+import type { FunnelEntry } from "./funnel.js";
 import { logStructured, shortRef, traceRing } from "./observe.js";
 
 // Receipts ledger bounds (spec-097): acked entries expire after the TTL
@@ -105,6 +106,9 @@ interface State {
   handles: Record<string, HandleRecord>;
   // Receipts ledger keyed by mailbox message id (spec-097). Survives restart.
   receipts: Record<string, ReceiptEntry>;
+  // Activation-funnel records keyed by agent id (spec-142). Survives restart.
+  // All logic (stamps, eviction fold, report) lives in funnel.ts.
+  funnel: Record<string, FunnelEntry>;
 }
 
 const EMPTY: State = {
@@ -114,7 +118,8 @@ const EMPTY: State = {
   channels: {},
   mailbox: {},
   handles: {},
-  receipts: {}
+  receipts: {},
+  funnel: {}
 };
 
 export class HostStore {
@@ -140,7 +145,8 @@ export class HostStore {
         channels: parsed.channels || {},
         mailbox: parsed.mailbox || {},
         handles: parsed.handles || {},
-        receipts: parsed.receipts || {}
+        receipts: parsed.receipts || {},
+        funnel: parsed.funnel || {}
       };
     } catch {
       return structuredClone(EMPTY);
@@ -465,6 +471,26 @@ export class HostStore {
 
   getChannel(channel_id: string): ChannelMeta | null {
     return this.state.channels[channel_id] ?? null;
+  }
+
+  // Reverse lookup for DID-aliased addressing (funnel canonicalization,
+  // spec-142). Linear — channel counts are small and the call is per event.
+  channelByDid(agent_did: string): ChannelMeta | null {
+    for (const c of Object.values(this.state.channels)) {
+      if (c.agent_did === agent_did) return c;
+    }
+    return null;
+  }
+
+  // --- activation funnel (spec-142) ---
+  // Narrow seam: funnel.ts owns all record logic; the store owns persistence.
+  // Returns the LIVE map — callers mutate it and then signal funnelChanged().
+  funnelEntries(): Record<string, FunnelEntry> {
+    return this.state.funnel;
+  }
+
+  funnelChanged(): void {
+    this.scheduleFlush();
   }
 
   // Record human activity (pair / authenticated /api/* request) on a channel.
