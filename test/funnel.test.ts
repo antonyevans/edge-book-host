@@ -314,3 +314,16 @@ test("funnel write failures never fail the wrapped operation (mailbox_send still
     (store as unknown as { funnelEntries: typeof original }).funnelEntries = original;
   }
 });
+
+// Public-surface guard (spec-142 §3): signup velocity and activation rate are
+// not public information — a future middleware that accidentally exports a
+// funnel counter must fail this test, not a privacy review.
+test("GET /metrics (no auth) exposes nothing funnel-related", async () => {
+  const { baseUrl } = await startServer();
+  const res = await fetch(`${baseUrl}/metrics`);
+  assert.equal(res.status, 200);
+  const raw = (await res.text()).toLowerCase();
+  for (const banned of ["funnel", "paired", "bilateral", "activation"]) {
+    assert.ok(!raw.includes(banned), `public /metrics must not contain "${banned}"`);
+  }
+});
