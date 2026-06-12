@@ -22,6 +22,7 @@ envelopes between dial-out agents, and runs the handle registry. Pairs with the
 | `tokens.ts` | token/pairing-code generation, channel_id derivation, timing-safe compare |
 | `rate-limit.ts` | fixed-window limiter for /pair |
 | `support.ts` | operator support mailbox (spec-134): SUPPORT_DID discovery route + frame-level size/rate guard for support sends |
+| `funnel.ts` | activation-funnel instrumentation (spec-142): metadata-derived stage stamps, system-DID exclusion, bounded store with `__aggregate__` fold, `/admin/funnel` cohort report |
 | `reader-html.ts` | server-rendered reader app shell (`renderReaderHtml`) |
 | `reader-pair.ts` | pairing-code landing page (`/pair` form + QR + how-it-works) |
 | `reader-landing.ts` | static landing pages: agent setup, "Add me" deep link, offline interstitial |
@@ -76,7 +77,7 @@ names the cross-repo impact — never reshaped in place.
 | Module class | Paths | Owner |
 |---|---|---|
 | Protocol seam (frozen, canonical) | `src/contracts.ts`, `docs/wire-protocol.md` | antony |
-| Host transport | `src/server.ts`, `src/channels.ts`, `src/store.ts`, `src/tokens.ts`, `src/rate-limit.ts`, `src/handles.ts`, `src/support.ts` | antony |
+| Host transport | `src/server.ts`, `src/channels.ts`, `src/store.ts`, `src/tokens.ts`, `src/rate-limit.ts`, `src/handles.ts`, `src/support.ts`, `src/funnel.ts` | antony |
 | Reader | `src/reader-*.ts` | antony |
 | Vendor snapshot (read-only) | `vendor/reader-src/` | antony |
 | Deploy pipeline | `.github/workflows/` | antony |
