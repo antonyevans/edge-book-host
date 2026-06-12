@@ -1,10 +1,12 @@
 // Authenticated admin/observability endpoints (ea-claude-138).
 //
-// Routes (all under /admin/, all GET):
-//   /admin/agents            — per-agent mailbox depth + last-seen dial-out
-//   /admin/trace/<trace_id>  — relay-side hops recorded for a trace
-//   /admin/funnel            — activation-funnel cohort report (spec-142);
-//                              counts only, never DIDs; small cohorts suppressed
+// Routes (all under /admin/):
+//   GET /admin/agents            — per-agent mailbox depth + last-seen dial-out
+//   GET /admin/trace/<trace_id>  — relay-side hops recorded for a trace
+//   GET /admin/funnel            — activation-funnel cohort report (spec-142);
+//                                  counts only, never DIDs; small cohorts suppressed
+//   PUT/DELETE /admin/pack/<slug> — starter-pack upsert/remove (spec-145);
+//                                  validation + caps live in packs.ts
 //
 // Auth model — FAIL CLOSED:
 //   - The token comes from the ADMIN_TOKEN env var, read per request (so a
@@ -23,6 +25,7 @@ import type { ChannelRegistry } from "./channels.js";
 import type { TraceRing } from "./observe.js";
 import type { HostStore } from "./store.js";
 import { buildFunnelReport } from "./funnel.js";
+import { handleAdminPack } from "./packs.js";
 import { timingSafeEqual } from "./tokens.js";
 
 export interface AdminDeps {
@@ -57,7 +60,7 @@ function json(res: http.ServerResponse, status: number, body: unknown): void {
 
 // Handle a request under /admin/. Returns true when the request was handled
 // (it always is — the caller routes by path prefix).
-export function handleAdmin(req: http.IncomingMessage, res: http.ServerResponse, url: URL, deps: AdminDeps): void {
+export function handleAdmin(req: http.IncomingMessage, res: http.ServerResponse, url: URL, deps: AdminDeps, body?: unknown): void {
   const configured = process.env.ADMIN_TOKEN || "";
   if (!configured) {
     // Fail closed: without a configured token the admin surface does not exist.
@@ -67,6 +70,12 @@ export function handleAdmin(req: http.IncomingMessage, res: http.ServerResponse,
   const presented = bearerToken(req);
   if (!presented || !timingSafeEqual(presented, configured)) {
     json(res, 401, { ok: false, error: "unauthorized" });
+    return;
+  }
+  // Starter-pack registry writes (spec-145) — the only non-GET admin routes.
+  // Method routing (PUT/DELETE/405) lives in packs.ts.
+  if (url.pathname.startsWith("/admin/pack/")) {
+    handleAdminPack(req, res, url, deps.store, json, body);
     return;
   }
   if (req.method !== "GET") {
