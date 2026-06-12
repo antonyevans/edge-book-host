@@ -25,7 +25,9 @@ export async function startServer(): Promise<{ baseUrl: string; wsUrl: string; c
   return {
     baseUrl,
     wsUrl,
-    close: () => new Promise((r) => { server.close(() => r()); })
+    // closeAllConnections: a failing assertion can leave agent sockets open;
+    // without this, server.close() waits on them and a red run hangs forever.
+    close: () => new Promise((r) => { server.closeAllConnections?.(); server.close(() => { started = false; r(); }); })
   };
 }
 

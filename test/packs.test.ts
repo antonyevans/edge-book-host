@@ -222,3 +222,38 @@ test("packs (spec-145)", async (t) => {
     assert.ok(snapshot.packs && Object.keys(snapshot.packs).length > 0, "packs persisted in host state");
   });
 });
+
+// Review-finding regressions (fresh-context review, 2026-06-12): the real
+// load path — a state.json written by THIS process round-trips packs, and a
+// pre-145 state.json (no `packs` key) loads cleanly as {}.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { HostStore } from "../src/store.js";
+
+test("packs persist through a real state.json round trip; pre-145 state loads without a packs key", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ebh-packs-load-"));
+  const a = new HostStore(dir);
+  a.packsMap()["loadtest"] = { slug: "loadtest", title: "Load", description: "", member_handles: ["alice"], updated_at: Date.now() };
+  a.packsChanged();
+  a.flushNow();
+  const b = new HostStore(dir);
+  assert.equal(b.packsMap()["loadtest"]?.title, "Load", "pack survived the disk round trip");
+
+  const legacy = fs.mkdtempSync(path.join(os.tmpdir(), "ebh-packs-legacy-"));
+  fs.writeFileSync(path.join(legacy, "state.json"), JSON.stringify({ channels: {}, mailbox: {} }));
+  const c = new HostStore(legacy);
+  assert.deepEqual(c.packsMap(), {}, "pre-145 state.json loads with empty packs");
+});
+
+test("admin upsert dedupes member handles and rejects oversize titles", async (t) => {
+  const serverCtx = await startServer();
+  t.after(async () => { await serverCtx.close(); });
+  // Upsert an existing slug: the cap test earlier filled all 100 pack slots
+  // in the shared store, and updating-at-cap is allowed (create is not).
+  const dedup = await putPack(serverCtx.baseUrl, "filler-99", { title: "D", description: "", member_handles: ["alice", "alice", "bob-agent"] });
+  assert.equal(dedup.status, 200, JSON.stringify(dedup.body));
+  assert.deepEqual((dedup.body as { pack: { member_handles: string[] } }).pack.member_handles, ["alice", "bob-agent"]);
+  const big = await putPack(serverCtx.baseUrl, "big-title", { title: "x".repeat(201), description: "", member_handles: [] });
+  assert.equal(big.status, 400);
+});

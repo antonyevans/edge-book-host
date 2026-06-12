@@ -57,6 +57,8 @@ function consumeFetchBudget(channel_id: string, slug: string, now = Date.now()):
     return { allowed: false, retry_after_ms: window - (now - started) };
   }
   fetchWindows.set(key, now);
+  // Sweep expired windows on write — keeps the map bounded without a timer.
+  for (const [k, v] of fetchWindows) if (now - v >= window) fetchWindows.delete(k);
   return { allowed: true, retry_after_ms: 0 };
 }
 
@@ -113,14 +115,16 @@ export function handlePackFetch(req: http.IncomingMessage, res: http.ServerRespo
 
 function validatePackBody(body: unknown): { ok: true; title: string; description: string; member_handles: string[] } | { ok: false; error: string } {
   const b = (body ?? {}) as Record<string, unknown>;
-  if (typeof b.title !== "string" || !b.title.trim()) return { ok: false, error: "invalid_title" };
-  const description = typeof b.description === "string" ? b.description : "";
+  // Length caps: title/description are served verbatim on the public /packs.
+  if (typeof b.title !== "string" || !b.title.trim() || b.title.length > 200) return { ok: false, error: "invalid_title" };
+  const description = typeof b.description === "string" ? b.description.slice(0, 2000) : "";
   if (!Array.isArray(b.member_handles)) return { ok: false, error: "invalid_member_handles" };
   for (const m of b.member_handles) {
     if (typeof m !== "string" || !isValidSlug(m)) return { ok: false, error: `invalid_member_handle: ${String(m)}` };
   }
-  if (b.member_handles.length > PACK_MEMBER_CAP) return { ok: false, error: `too_many_members (max ${PACK_MEMBER_CAP})` };
-  return { ok: true, title: b.title, description, member_handles: b.member_handles as string[] };
+  const member_handles = [...new Set(b.member_handles as string[])];
+  if (member_handles.length > PACK_MEMBER_CAP) return { ok: false, error: `too_many_members (max ${PACK_MEMBER_CAP})` };
+  return { ok: true, title: b.title, description, member_handles };
 }
 
 // PUT/DELETE /admin/pack/:slug — caller (admin.ts) has already passed the
