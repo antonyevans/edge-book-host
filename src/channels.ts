@@ -295,8 +295,8 @@ export class ChannelRegistry {
         this.send(ws, { type: "pair_register_err", request_id, error: "invalid_pair_request" });
         return;
       }
-      this.store.registerPairingCode(code, channel.channel_id, ttl_ms);
-      this.send(ws, { type: "pair_register_ok", request_id, channel_id: channel.channel_id });
+      const expires_at = this.store.registerPairingCode(code, channel.channel_id, ttl_ms);
+      this.send(ws, { type: "pair_register_ok", request_id, channel_id: channel.channel_id, ttl_ms, expires_at });
       return;
     }
     if (type === "sessions_revoke") {

@@ -379,3 +379,19 @@ test("stalled agent does not block other concurrent requests", async () => {
 });
 
 after(async () => { if (ctx) await ctx.close(); });
+
+test("pair_register_ok carries authoritative expires_at and ttl_ms (ea-claude-112)", async () => {
+  const acks: Record<string, unknown>[] = [];
+  const agent = await spawnAgent(ctx.wsUrl, {
+    handle: (frame) => { if (frame.type === "pair_register_ok") acks.push(frame); }
+  });
+  const before = Date.now();
+  agent.ws.send(JSON.stringify({ type: "pair_register", code: "EXPIRY-1", ttl_ms: 60_000, request_id: "rexp" }));
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(acks.length, 1);
+  const ok = acks[0] as { ttl_ms?: number; expires_at?: number };
+  assert.equal(ok.ttl_ms, 60_000);
+  assert.ok(typeof ok.expires_at === "number", "expires_at present");
+  assert.ok(ok.expires_at! >= before + 60_000 && ok.expires_at! <= Date.now() + 60_000, "expires_at anchored to host clock at registration");
+  agent.close();
+});
