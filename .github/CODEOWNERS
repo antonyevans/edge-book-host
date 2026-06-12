@@ -1,0 +1,11 @@
+# CODEOWNERS — edge-book-host (ea-claude-149)
+# Deploy-on-merge repo: a merge to main IS a production deploy (Fly.io).
+# Agents author, the owner reviews and merges — no exceptions on this repo.
+* @antonyevans
+
+# Frozen contract seam — canonical for BOTH repos (CLI mirrors these types):
+/src/contracts.ts @antonyevans
+/docs/wire-protocol.md @antonyevans
+# Deploy pipeline and vendor snapshot:
+/.github/workflows/ @antonyevans
+/vendor/ @antonyevans

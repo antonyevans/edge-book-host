@@ -58,3 +58,17 @@ coordinated change in `edge-book-cli`.
 - `vendor/reader-src/` (one-way snapshot)
 - `Dockerfile`, `fly.toml`, `.github/workflows/deploy.yml` (deploys production)
 - cookie names/TTLs and the CSRF double-submit scheme
+
+## Module ownership (ea-claude-149)
+
+Accountable owner per module class. Agents author; the owner merges (every
+merge deploys). Frozen surfaces change only via an owner-approved PR that
+names the cross-repo impact — never reshaped in place.
+
+| Module class | Paths | Owner |
+|---|---|---|
+| Protocol seam (frozen, canonical) | `src/contracts.ts`, `docs/wire-protocol.md` | antony |
+| Host transport | `src/server.ts`, `src/channels.ts`, `src/store.ts`, `src/tokens.ts`, `src/rate-limit.ts`, `src/handles.ts`, `src/support.ts` | antony |
+| Reader | `src/reader-*.ts` | antony |
+| Vendor snapshot (read-only) | `vendor/reader-src/` | antony |
+| Deploy pipeline | `.github/workflows/` | antony |
