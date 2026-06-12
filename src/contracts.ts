@@ -115,6 +115,10 @@ export interface MailboxSendOkFrame {
   type: "mailbox_send_ok";
   request_id: string;
   id: string;
+  /** Liveness answer (spec-097 §B.1): whether any live channel claimed `to`
+   *  at enqueue time. Snapshot only — never a delivery guarantee. ADDITIVE:
+   *  old hosts omit it; old clients ignore it. */
+  recipient_live?: boolean;
 }
 export interface MailboxSendErrFrame {
   type: "mailbox_send_err";
@@ -135,6 +139,40 @@ export interface MailboxAckFrame {
   id: string;
 }
 
+// ── Delivery receipts frames (spec-097) ──────────────────────────────────────
+// The SENDER asks for per-message delivery state (≤50 ids per request).
+//   Agent → Host   { type:"mailbox_status",     request_id, ids }
+//   Host → Agent   { type:"mailbox_status_ok",  request_id, statuses }
+//                  { type:"mailbox_status_err", request_id, error }
+// Fail closed: an id is reported only when the requesting channel's channel_id
+// equals the message's host-stamped `from`; anyone else sees "unknown".
+export interface MailboxStatusFrame {
+  type: "mailbox_status";
+  request_id: string;
+  /** Host-assigned mailbox message ids to query (1–50 per request). */
+  ids: string[];
+}
+/** One per queried id. For `acked`/`unknown`, `queued_ms` and `recipient_live`
+ *  are ABSENT (key omitted, not null) — spec-097 §B.2. */
+export interface MailboxStatusEntry {
+  id: string;
+  state: "queued" | "delivered" | "acked" | "unknown";
+  /** Time in the queue so far (epoch-ms delta). Present for queued/delivered. */
+  queued_ms?: number;
+  /** Whether the recipient has a live channel NOW. Present for queued/delivered. */
+  recipient_live?: boolean;
+}
+export interface MailboxStatusOkFrame {
+  type: "mailbox_status_ok";
+  request_id: string;
+  statuses: MailboxStatusEntry[];
+}
+export interface MailboxStatusErrFrame {
+  type: "mailbox_status_err";
+  request_id: string;
+  error: string;
+}
+
 // ── Handle registry frames (spec-096) ───────────────────────────────────────
 //   Agent → Host   { type:"handle_claim", request_id, handle, card, claimed_at, claim_sig }
 //   Host → Agent   { type:"handle_claim_ok",  request_id, handle }
@@ -146,6 +184,9 @@ export interface HandleClaimFrame {
   card: unknown;
   claimed_at: number;
   claim_sig: string;
+  /** Directory opt-out (spec-096 directory). Defaults to true when absent —
+   *  old clients that never send the field stay fully discoverable. */
+  discoverable?: boolean;
 }
 export interface HandleClaimOkFrame { type: "handle_claim_ok"; request_id: string; handle: string; }
 export interface HandleClaimErrFrame { type: "handle_claim_err"; request_id: string; reason: "taken" | "bad_sig" | "bad_format" | "bad_card"; }

@@ -52,6 +52,14 @@ repo REIMPLEMENTS these types — there is no compiler across the seam. You may
 move them between files; you may NOT rename or reshape them, ever, without a
 coordinated change in `edge-book-cli`.
 
+`schemas/wire-frames.schema.json` is the canonical MACHINE-READABLE contract
+artifact, generated from `src/contracts.ts` by `npm run schemas` (which also
+emits the runtime embed `src/wire-schema.ts` — generated, never hand-edited).
+Any change to the seam must regenerate both; `npm run schemas:check` (run in
+CI) fails on drift, and CI also diffs the schema against the copy vendored in
+`edge-book-cli`. Inbound agent frames are validated against it fail-closed at
+the ws seam (`src/frame-validate.ts`).
+
 ## Do not touch casually
 
 - `src/contracts.ts` shapes, wire frame fields, HTTP route paths

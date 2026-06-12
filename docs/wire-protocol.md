@@ -7,6 +7,12 @@ this exact contract. Carried over a single persistent `wss` per agent channel.
 Message framing: each frame is one JSON object, one frame per WebSocket message
 (text frame). No newline separators inside a frame.
 
+Machine-readable contract: `schemas/wire-frames.schema.json` (JSON Schema,
+generated from `src/contracts.ts` via `npm run schemas`; drift-checked in CI)
+defines the mailbox, status, and handle frames plus the `WireFrame` union. The
+host validates those inbound frames against it fail-closed; unknown EXTRA
+fields are tolerated (additive evolution), malformed required fields are not.
+
 ## Connection lifecycle
 
 1. Agent dials `wss://<host>/agent/ws`.
