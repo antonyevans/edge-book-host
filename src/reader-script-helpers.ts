@@ -116,7 +116,7 @@ export const READER_SCRIPT_HELPERS = `(function () {
     const avatarHtml = avatar ? '<span class="avatar mini contact-avatar">' + escapeHtml(avatar) + '</span>' : "";
     return '<article class="item ' + classes + '" tabindex="0" data-payload="' + encodeURIComponent(JSON.stringify(payload)) + '"><div class="item-head"><div class="item-title-row">' + avatarHtml + '<div><h3>' + escapeHtml(title) + '</h3>' + timeHtml + '</div></div><span class="inspect-tag">Inspect</span></div><div class="item-body">' + escapeHtml(body || "") + '</div>' + (trust.length ? trustStrip(trust) : "") + factHtml + (actions ? '<div class="actions">' + actions + '</div>' : '') + '</article>';
   }
-  // feedItem: Sanctum-styled post card with collapsed scope + on-demand details
+  // feedItem: Edge Book-styled post card with collapsed scope + on-demand details
   function feedItem(title, body, facts, payload, classes, actions, trust, timestamp, avatar) {
     classes = classes || ""; actions = actions || ""; trust = trust || []; timestamp = timestamp || ""; avatar = avatar || "";
     const timeHtml = timestamp ? '<div class="item-time">' + escapeHtml(timestamp) + '</div>' : "";
@@ -377,7 +377,7 @@ export const READER_SCRIPT_HELPERS = `(function () {
     // People card: list friend contacts
     var friends = friendContacts();
     var peopleCount = document.getElementById("peopleCount");
-    if (peopleCount) peopleCount.textContent = friends.length + " in your sanctum";
+    if (peopleCount) peopleCount.textContent = friends.length + " in your Edge Book";
     var friendsList = document.getElementById("friendsList");
     if (friendsList) {
       friendsList.innerHTML = friends.slice(0, 6).map(function(c) {
