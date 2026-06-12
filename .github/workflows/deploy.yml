@@ -30,6 +30,26 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npx eslint src
       - run: npx tsc -p . --noEmit
+      # Generator equivalence (spec-0042): committed schema artifacts must
+      # match a fresh regeneration from src/contracts.ts.
+      - run: npm run schemas:check
+      # Cross-repo contract drift: the cli repo vendors a copy of the wire
+      # schema; it must be byte-identical to ours. The cli repo is public and
+      # this repo is private, so the check lives here. 404 = not yet vendored
+      # (bootstrap) — skip; any other non-200 fails loud.
+      - name: Check wire schema matches edge-book-cli
+        run: |
+          code=$(curl -sS -o /tmp/cli-wire-frames.schema.json -w "%{http_code}" \
+            https://raw.githubusercontent.com/antonyevans/edge-book-cli/main/schemas/wire-frames.schema.json)
+          if [ "$code" = "404" ]; then
+            echo "cli copy not yet vendored — skipping (bootstrap)"
+            exit 0
+          fi
+          if [ "$code" != "200" ]; then
+            echo "fetch failed: HTTP $code"
+            exit 1
+          fi
+          diff -u schemas/wire-frames.schema.json /tmp/cli-wire-frames.schema.json
       - run: npm test
 
   deploy:
