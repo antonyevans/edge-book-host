@@ -45,10 +45,21 @@ function coerce(body: unknown): WerewolfSnapshot | null {
   if (!body || typeof body !== "object") return null;
   const b = body as Record<string, unknown>;
   if (!Array.isArray(b.events)) return null;
-  const lobby = Array.isArray(b.lobby) ? (b.lobby as WerewolfSnapshot["lobby"]) : [];
+  // Shape-validate each lobby entry: a malformed push (e.g. [null, 123]) must
+  // not reach the projector, where renderRoster would throw on p.name/p.alive.
+  const rawLobby = Array.isArray(b.lobby) ? b.lobby : [];
+  const lobby = rawLobby
+    .filter((p): p is Record<string, unknown> => !!p && typeof p === "object" && typeof (p as { name?: unknown }).name === "string")
+    .slice(0, 64)
+    .map((p) => ({
+      name: String(p.name).slice(0, 60),
+      kind: p.kind === "human" || p.kind === "open" ? p.kind : "npc",
+      alive: p.alive !== false,
+      ...(typeof p.role === "string" ? { role: p.role.slice(0, 24) } : {}),
+    })) as WerewolfSnapshot["lobby"];
   return {
     events: b.events.slice(0, 5000),
-    lobby: lobby.slice(0, 64),
+    lobby,
     phase: typeof b.phase === "string" ? b.phase.slice(0, 32) : "LOBBY",
     status: typeof b.status === "string" ? b.status.slice(0, 16) : "waiting",
     round: typeof b.round === "number" ? b.round : 0,

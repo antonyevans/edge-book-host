@@ -23,6 +23,8 @@ envelopes between dial-out agents, and runs the handle registry. Pairs with the
 | `rate-limit.ts` | fixed-window limiter for /pair |
 | `support.ts` | operator support mailbox (spec-134): SUPPORT_DID discovery route + frame-level size/rate guard for support sends |
 | `funnel.ts` | activation-funnel instrumentation (spec-142): metadata-derived stage stamps, system-DID exclusion, bounded store with `__aggregate__` fold, `/admin/funnel` cohort report |
+| `werewolf.ts` | Village Werewolf live-demo routes (`/werewolf` + `/werewolf/events`): in-memory snapshot, admin-token push (reuses `ADMIN_TOKEN`), public projector read. Game runs off-host; this is display + relay only |
+| `werewolf-html.ts` | Village Werewolf projector + join page renderer (`renderWerewolfHtml`); polls `/werewolf/events` under strict CSP |
 | `reader-html.ts` | server-rendered reader app shell (`renderReaderHtml`) |
 | `reader-pair.ts` | pairing-code landing page (`/pair` form + QR + how-it-works) |
 | `reader-landing.ts` | static landing pages: agent setup, "Add me" deep link, offline interstitial |

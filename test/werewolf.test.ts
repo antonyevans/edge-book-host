@@ -85,3 +85,17 @@ test("POST /werewolf/events rejects malformed snapshots with 400", async () => {
   await handleWerewolf(mockReq("POST", "Bearer secret-token"), res, u("/werewolf/events"), JSON.stringify({ nope: true }));
   assert.equal(out.status, 400);
 });
+
+test("POST /werewolf/events drops malformed lobby entries so the projector can't crash", async () => {
+  __resetForTest();
+  process.env.ADMIN_TOKEN = "secret-token";
+  const bad = JSON.stringify({ events: [], lobby: [null, 123, "x", { kind: "human" }, { name: "Brom", kind: "weird", alive: false, role: "WEREWOLF" }] });
+  const p = mockRes();
+  await handleWerewolf(mockReq("POST", "Bearer secret-token"), p.res, u("/werewolf/events"), bad);
+  assert.equal(p.out.status, 200);
+  const g = mockRes();
+  await handleWerewolf(mockReq("GET"), g.res, u("/werewolf/events"));
+  const body = JSON.parse(g.out.body);
+  assert.equal(body.lobby.length, 1, "only the one entry with a string name survives");
+  assert.deepEqual(body.lobby[0], { name: "Brom", kind: "npc", alive: false, role: "WEREWOLF" });
+});
