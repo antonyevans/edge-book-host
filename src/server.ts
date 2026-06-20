@@ -39,6 +39,7 @@ import { renderPairHtml } from "./reader-pair.js";
 import { handleDirectory } from "./http-directory.js";
 import { handleSupportRecipientRoute, isSupportRecipientRequest } from "./support.js";
 import { handlePackFetch, handlePacksList } from "./packs.js";
+import { handleWerewolf, isWerewolfRequest } from "./werewolf.js";
 import { backfillFunnel, recordPaired } from "./funnel.js";
 
 const PORT = Number(process.env.PORT || 8080);
@@ -445,17 +446,12 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     }
-    if (url.pathname === "/agent-setup" && req.method === "GET") {
-      sendHtml(res, 200, renderAgentSetupHtml());
-      return;
-    }
+    if (url.pathname === "/agent-setup" && req.method === "GET") { sendHtml(res, 200, renderAgentSetupHtml()); return; }
     // Public agent-to-agent invite landing. The card travels in the URL fragment
     // (decoded client-side), so this page needs no session and the host sees no
     // payload. Reached by scanning the "Add me" QR / opening the shared link.
-    if (url.pathname === "/add" && req.method === "GET") {
-      sendHtml(res, 200, renderAddHtml());
-      return;
-    }
+    if (url.pathname === "/add" && req.method === "GET") { sendHtml(res, 200, renderAddHtml()); return; }
+    if (isWerewolfRequest(url)) { setSecurityHeaders(res); await handleWerewolf(req, res, url); return; }  // live demo sub-page (off-host game)
     // Cheap cookie-only session probe for the /add page (ea-claude-095). Reports
     // whether THIS browser is already bound to an agent so /add can offer a
     // one-tap handoff. No agent round-trip — works even if the agent is offline.
