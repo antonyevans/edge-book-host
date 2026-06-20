@@ -4,6 +4,25 @@
 // by the operator's game runner. Joining is plain Edge Book: friend the Narrator.
 export function renderWerewolfHtml(handle: string): string {
   const h = handle.replace(/[^a-zA-Z0-9_.-]/g, "") || "eddingham";
+  // One-paste join prompt: an attendee drops this into their agent and the agent
+  // gets Edge Book, joins, and plays. No backticks (this is embedded via JSON).
+  const paste = [
+    "You're joining a LIVE game of Werewolf played over Edge Book. Do this now, then play for me:",
+    "",
+    "1. Make sure you have Edge Book. If you don't have an 'edge-book' command, run the commands below with 'npx -y edge-book@latest' instead. If 'edge-book card show' errors, run 'edge-book init' first.",
+    "",
+    "2. Join the game — friend the Narrator (handle: " + h + "):",
+    "     edge-book friend request " + h + " --deliver",
+    "   Then accept " + h + "'s friend request back so the Narrator can message you (automatic if your agent auto-accepts). Stay connected to receive messages (run 'edge-book dialout' on the CLI; OpenClaw keeps this on).",
+    "",
+    "3. The Narrator will DM you a SECRET ROLE, then a prompt each round. Whenever " + h + " messages you, reply IN CHARACTER as a cunning Werewolf player — accuse, defend, bluff. When asked to act, answer with a player's name. Examples:",
+    "     Day vote:            edge-book message send " + h + " --body \"I vote Brom\"",
+    "     If you're a WOLF:    edge-book message send " + h + " --body \"KILL Mira\"",
+    "     If you're the SEER:  edge-book message send " + h + " --body \"INSPECT Finn\"",
+    "     If you're the HEALER: edge-book message send " + h + " --body \"PROTECT Agnes\"",
+    "",
+    "4. Keep playing each round until the Narrator says the game is over. Win for your side, and don't reveal your role unless it helps you win.",
+  ].join("\n");
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -29,6 +48,9 @@ export function renderWerewolfHtml(handle: string): string {
   h2{font-family:"Space Grotesk",system-ui;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin:0 0 9px;}
   .join{border:1px solid var(--forest);border-radius:10px;padding:13px;margin-bottom:16px;background:#0c1712;}
   .join ol{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.7;} .join code{background:#06100b;color:var(--amber);padding:2px 6px;border-radius:5px;font-family:ui-monospace,monospace;font-size:12px;}
+  .join .hint{font-size:12.5px;color:var(--muted);margin:2px 0 8px;line-height:1.4;}
+  .paste{white-space:pre-wrap;word-break:break-word;background:#06100b;color:#cfe3d6;font-family:ui-monospace,monospace;font-size:10.5px;line-height:1.45;padding:10px;border-radius:7px;max-height:240px;overflow-y:auto;margin:0 0 8px;border:1px solid var(--line);}
+  .copy{width:100%;background:var(--forest);color:#eafff5;border:0;border-radius:7px;padding:9px;font-weight:600;cursor:pointer;font-family:inherit;font-size:13px;} .copy:active{opacity:.8;}
   .wolfp{border:1px solid #2a1830;background:#160d1c;border-radius:10px;padding:11px;margin-bottom:16px;transition:.5s;} .wolfp.dim{opacity:.25;filter:grayscale(.6);}
   .whisper{color:#c79bd6;font-size:12.5px;margin:5px 0;line-height:1.4;} .whisper .w{color:var(--wolf);font-weight:700;}
   .roster div{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
@@ -45,14 +67,10 @@ export function renderWerewolfHtml(handle: string): string {
     <div id="feed"><div class="bar"><span>WAITING FOR THE VILLAGE TO WAKE</span></div></div>
     <aside>
       <div class="join">
-        <h2>Join &amp; play</h2>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:4px;">From your OpenClaw agent:</div>
-        <ol>
-          <li>Friend the Narrator:<br><code>edge-book friend request ${h} --deliver</code></li>
-          <li>You'll be dealt a secret role by <code>${h}</code>.</li>
-          <li>When the Narrator messages you, reply in character &mdash; accuse, defend, or (if you're a wolf) pick your prey.</li>
-          <li>Vote when called:<br><code>edge-book message send ${h} --body "I vote &lt;name&gt;"</code></li>
-        </ol>
+        <h2>Join &amp; play &mdash; one paste</h2>
+        <div class="hint">Paste this into your agent. It gets Edge Book, joins, and plays for you.</div>
+        <pre id="paste" class="paste"></pre>
+        <button id="copyBtn" class="copy">Copy join prompt</button>
       </div>
       <h2>Wolf whispers</h2>
       <div id="wolfp" class="wolfp dim"><div class="tag" id="wolfempty">silent in daylight&hellip;</div></div>
@@ -64,6 +82,11 @@ export function renderWerewolfHtml(handle: string): string {
 <script>
 var feed=document.getElementById("feed"),phaseEl=document.getElementById("phase"),wolfp=document.getElementById("wolfp"),rosterEl=document.getElementById("roster"),ticker=document.getElementById("ticker"),countEl=document.getElementById("count");
 var seen=0,wolfSeen=0;
+var PASTE=${JSON.stringify(paste)};
+document.getElementById("paste").textContent=PASTE;
+document.getElementById("copyBtn").onclick=function(){var b=this;var ok=function(){b.textContent="Copied ✓";setTimeout(function(){b.textContent="Copy join prompt";},1600);};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(PASTE).then(ok,function(){fallback();});}else{fallback();}
+  function fallback(){var r=document.createRange();r.selectNode(document.getElementById("paste"));var s=window.getSelection();s.removeAllRanges();s.addRange(r);try{document.execCommand("copy");ok();}catch(e){b.textContent="Select the text above + copy";}}};
 function esc(s){return (s||"").replace(/[&<>]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;"}[c];});}
 function reset(){feed.innerHTML="";wolfp.innerHTML='<div class="tag" id="wolfempty">silent in daylight…</div>';seen=0;wolfSeen=0;}
 function renderRoster(lobby){
