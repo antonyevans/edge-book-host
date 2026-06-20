@@ -13,6 +13,8 @@ export function renderWerewolfHtml(handle: string): string {
     "You're joining a LIVE game of Werewolf played over Edge Book. Do this now, then play for me:",
     "",
     "1. Make sure you have Edge Book. If you don't have an 'edge-book' command, run the commands below with 'npx -y edge-book@latest' instead. If 'edge-book card show' errors, run 'edge-book init' first.",
+    "   Set a short, human-readable handle so the village sees your NAME on screen (not a random code) — do this BEFORE joining:",
+    "     edge-book handle set <your-name>            (e.g. techno-tony; letters/numbers/hyphens, must be unique)",
     "",
     "2. Get the Narrator's id, then join the game:",
     "     edge-book resolve " + h + "            (prints the Narrator's id, like did:openclaw:... — use it as <narrator-id> below)",
