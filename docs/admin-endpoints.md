@@ -94,3 +94,19 @@ Privacy: log lines and admin responses carry routing metadata only —
 truncated channel refs, host message ids, timestamps, trace ids. Never
 message blobs, envelope plaintext (opaque to the host by design), tokens, or
 cookies.
+
+## Village Werewolf demo (`/werewolf`)
+
+Live event surface (`src/werewolf.ts`). The game itself runs on an operator
+machine and PUSHes state snapshots here; the host is display + relay only.
+
+- `GET /werewolf` — public projector + join page (polls the events endpoint).
+- `GET /werewolf/events` — public read of the current snapshot.
+- `POST /werewolf/events` — operator push, `Authorization: Bearer $ADMIN_TOKEN`
+  (same token + fail-closed-404-when-unset rules as `/admin/*`). Body is the
+  snapshot `{ events, lobby, phase, status, round }`; 512 KB cap.
+- `POST /werewolf/reset` — admin-gated; clears the snapshot back to LOBBY.
+
+Env var: `WEREWOLF_NARRATOR_HANDLE` sets the handle shown in the join
+instructions (default `eddingham`). Set as a Fly secret to match the live
+Narrator agent: `fly secrets set WEREWOLF_NARRATOR_HANDLE=<handle>`.
