@@ -137,7 +137,7 @@ function addEvent(ev){
   else return;
   feed.appendChild(d);
 }
-function addWhisper(ev){var e=document.getElementById("wolfempty");if(e)e.remove();var d=document.createElement("div");d.className="whisper";d.innerHTML='<span class="w">'+esc(ev.from)+':</span> '+esc(ev.text);wolfp.appendChild(d);}
+function addWhisper(ev){var e=document.getElementById("wolfempty");if(e)e.remove();var d=document.createElement("div");d.className="whisper";d.innerHTML='<span class="w">&#128058;</span> '+esc(ev.text);wolfp.appendChild(d);}
 function apply(snap){
   var evs=snap.events||[];
   if(evs.length<seen){reset();}
