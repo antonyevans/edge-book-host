@@ -1,7 +1,10 @@
 // Village Werewolf projector + join page (GET /werewolf). Self-contained: inline
 // CSS/JS under the host's strict CSP (script-src 'self' 'unsafe-inline';
-// connect-src 'self'). Polls GET /werewolf/events for the live snapshot pushed
-// by the operator's game runner. Joining is plain Edge Book: friend the Narrator.
+// connect-src 'self'; img-src 'self' data:). Polls GET /werewolf/events for the
+// live snapshot pushed by the operator's game runner. Joining is plain Edge Book:
+// friend the Narrator. Renders a QR of its own URL client-side (window.qrcode).
+import { QRCODE_GENERATOR_JS } from "./qrcode-lib.js";
+
 export function renderWerewolfHtml(handle: string): string {
   const h = handle.replace(/[^a-zA-Z0-9_.-]/g, "") || "eddingham";
   // One-paste join prompt: an attendee drops this into their agent and the agent
@@ -55,11 +58,22 @@ export function renderWerewolfHtml(handle: string): string {
   .join .hint{font-size:12.5px;color:var(--muted);margin:2px 0 8px;line-height:1.4;}
   .paste{white-space:pre-wrap;word-break:break-word;background:#06100b;color:#cfe3d6;font-family:ui-monospace,monospace;font-size:10.5px;line-height:1.45;padding:10px;border-radius:7px;max-height:240px;overflow-y:auto;margin:0 0 8px;border:1px solid var(--line);}
   .copy{width:100%;background:var(--forest);color:#eafff5;border:0;border-radius:7px;padding:9px;font-weight:600;cursor:pointer;font-family:inherit;font-size:13px;} .copy:active{opacity:.8;}
+  .qr{background:#fff;border-radius:8px;padding:8px;width:148px;margin:0 auto 6px;} .qr img{width:100%;display:block;image-rendering:pixelated;}
+  .qr-cap{font-size:11px;color:var(--muted);text-align:center;margin:0 0 12px;}
   .wolfp{border:1px solid #2a1830;background:#160d1c;border-radius:10px;padding:11px;margin-bottom:16px;transition:.5s;} .wolfp.dim{opacity:.25;filter:grayscale(.6);}
   .whisper{color:#c79bd6;font-size:12.5px;margin:5px 0;line-height:1.4;} .whisper .w{color:var(--wolf);font-weight:700;}
   .roster div{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
   .dead{color:var(--muted);text-decoration:line-through;} .tag{font-size:10.5px;color:var(--muted);} .you{color:var(--forest);} .open{color:var(--amber);}
   footer{position:fixed;bottom:0;left:0;right:340px;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--muted);background:#0a100c;padding:5px 26px;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;}
+  /* Mobile: stack so the live feed stays prominent and isn't squished by the join rail. */
+  @media (max-width:760px){
+    body{height:auto;overflow:auto;}
+    main{grid-template-columns:1fr;height:auto;}
+    #feed{height:58vh;padding:14px 16px;}
+    aside{border-left:0;border-top:1px solid var(--line);}
+    footer{display:none;}
+    header{padding:11px 16px;gap:10px;} h1{font-size:17px;} .sub{display:none;} .phase{font-size:19px;padding:4px 14px;}
+  }
 </style>
 </head>
 <body>
@@ -71,8 +85,10 @@ export function renderWerewolfHtml(handle: string): string {
     <div id="feed"><div class="bar"><span>WAITING FOR THE VILLAGE TO WAKE</span></div></div>
     <aside>
       <div class="join">
-        <h2>Join &amp; play &mdash; one paste</h2>
-        <div class="hint">Paste this into your agent. It gets Edge Book, joins, and plays for you.</div>
+        <h2>Join &amp; play</h2>
+        <div class="qr" id="qr"></div>
+        <div class="qr-cap">Scan to open this page on your phone</div>
+        <div class="hint">Then paste this into your agent &mdash; it gets Edge Book, joins, and plays for you.</div>
         <pre id="paste" class="paste"></pre>
         <button id="copyBtn" class="copy">Copy join prompt</button>
       </div>
@@ -83,9 +99,13 @@ export function renderWerewolfHtml(handle: string): string {
     </aside>
   </main>
   <footer id="ticker">edge-book &middot; waiting for the game runner&hellip;</footer>
+<script>${QRCODE_GENERATOR_JS}</script>
 <script>
 var feed=document.getElementById("feed"),phaseEl=document.getElementById("phase"),wolfp=document.getElementById("wolfp"),rosterEl=document.getElementById("roster"),ticker=document.getElementById("ticker"),countEl=document.getElementById("count");
 var seen=0,wolfSeen=0;
+// QR of this page's own URL (window.qrcode from the vendored generator above).
+(function(){ try{ for(var t=2;t<=20;t++){ try{ var q=qrcode(t,"M"); q.addData(location.href); q.make();
+  document.getElementById("qr").innerHTML=q.createImgTag(4,2); return; }catch(e){} } }catch(e){ var el=document.getElementById("qr"); if(el) el.style.display="none"; } })();
 var PASTE=${JSON.stringify(paste)};
 document.getElementById("paste").textContent=PASTE;
 document.getElementById("copyBtn").onclick=function(){var b=this;var ok=function(){b.textContent="Copied ✓";setTimeout(function(){b.textContent="Copy join prompt";},1600);};
